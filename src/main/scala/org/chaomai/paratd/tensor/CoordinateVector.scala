@@ -5,7 +5,6 @@ import breeze.stats.distributions.Rand
 import breeze.storage.Zero
 import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
-
 import scala.reflect.ClassTag
 
 /**
