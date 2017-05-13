@@ -66,9 +66,3 @@ case class TEntry[V](coordinate: Coordinate, value: V) extends Entry[V] {
 case class VEntry[V](coordinate: Int, value: V) extends Entry[V] {
   override def toString: String = "%s @ %d".format(value.toString, coordinate)
 }
-
-trait SparseTensor[V] extends Serializable {
-  val shape: IndexedSeq[Int]
-  val dimension: Int
-  val size: Int
-}

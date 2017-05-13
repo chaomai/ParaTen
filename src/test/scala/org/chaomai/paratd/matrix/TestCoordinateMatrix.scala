@@ -1,6 +1,7 @@
-package org.chaomai.paratd.tensor
+package org.chaomai.paratd.matrix
 
 import breeze.linalg.{*, DenseMatrix, norm}
+import org.chaomai.paratd.tensor.{Coordinate, CoordinateMatrix}
 import org.chaomai.paratd.{Common, UnitSpec}
 
 /**

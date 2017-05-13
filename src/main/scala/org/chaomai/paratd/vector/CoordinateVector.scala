@@ -1,10 +1,13 @@
-package org.chaomai.paratd.tensor
+package org.chaomai.paratd.vector
 
 import breeze.linalg.DenseVector
 import breeze.stats.distributions.Rand
 import breeze.storage.Zero
 import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
+
+import org.chaomai.paratd.tensor.VEntry
+
 import scala.reflect.ClassTag
 
 /**
@@ -13,12 +16,10 @@ import scala.reflect.ClassTag
 class CoordinateVector[@specialized(Double, Float, Int, Long) V: ClassTag](
     val size: Int,
     private val storage: RDD[VEntry[V]])
-    extends SparseTensor[V] {
+    extends Vector {
 
   val shape: IndexedSeq[Int] = IndexedSeq(size)
   val dimension: Int = 1
-
-  assert(shape.length == 1)
 
   def foreach(f: VEntry[V] => Unit): Unit = storage.foreach(f)
 
@@ -26,34 +27,6 @@ class CoordinateVector[@specialized(Double, Float, Int, Long) V: ClassTag](
       f: Iterator[VEntry[V]] => Iterator[U],
       preservesPartitioning: Boolean = false): RDD[U] =
     storage.mapPartitions(f, preservesPartitioning)
-
-  /***
-    * Inner product.
-    *
-    * @param y  another vector.
-    * @param n  implicit Numeric n.
-    * @return   inner product result.
-    */
-  def >*(y: CoordinateVector[V])(implicit n: Numeric[V]): V = {
-    val s1 = size
-    val s2 = y.size
-
-    require(s1 == s2,
-            s"Requested inner product, "
-              + s"but got vector1 with size $s1 and vector2 with size $s2")
-    ???
-  }
-
-  /***
-    * Outer product.
-    *
-    * @param y  another vector.
-    * @param n  implicit Numeric n.
-    * @return   outer product result.
-    */
-  def <*(y: CoordinateVector[V])(implicit n: Numeric[V]): V = {
-    ???
-  }
 
   def apply(idx: Int): V =
     storage

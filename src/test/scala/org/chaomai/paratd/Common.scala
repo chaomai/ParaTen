@@ -21,7 +21,7 @@ object Common {
     TensorFactory.fromFile("src/main/resources/data/test_dim3.tensor",
                            sizeOfDim3Tensor)(sc)
 
-  val sizeOfDim4SparseTensor: IndexedSeq[Int] = IndexedSeq(2, 2, 2, 2)
+  val sizeOfDim4SparseTensor: IndexedSeq[Int] = IndexedSeq(2, 2, 3, 2)
 
   val dim4SparseTensor: CoordinateTensor[Double] =
     TensorFactory.fromFile("src/main/resources/data/test_dim4.tensor",

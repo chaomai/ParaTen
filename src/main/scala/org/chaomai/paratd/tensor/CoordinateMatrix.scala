@@ -17,6 +17,9 @@ import breeze.stats.distributions.Rand
 import breeze.storage.Zero
 import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
+import org.chaomai.paratd.matrix.{IndexedRow, IndexedRowMatrix}
+import org.chaomai.paratd.vector.{CoordinateVector, LocalCoordinateVector}
+
 import scala.reflect.ClassTag
 
 /**
@@ -27,7 +30,7 @@ class CoordinateMatrix[
     val rows: Int,
     val cols: Int,
     private val storage: RDD[TEntry[V]])
-    extends SparseTensor[V] {
+    extends Serializable {
   val shape: IndexedSeq[Int] = IndexedSeq(rows, cols)
   val dimension: Int = 2
   val size: Int = rows * cols
@@ -45,7 +48,7 @@ class CoordinateMatrix[
 
   def collect: Array[TEntry[V]] = storage.collect()
 
-  def union(rdd: RDD[TEntry[V]]): CoordinateMatrix[V] =
+  def addEntry(rdd: RDD[TEntry[V]]): CoordinateMatrix[V] =
     CoordinateMatrix(rows, cols, storage.union(rdd))
 
   /***
@@ -73,6 +76,19 @@ class CoordinateMatrix[
     }
 
     builder.result
+  }
+
+  def toIndexedRowMatrix: IndexedRowMatrix[V] = {
+    val r = storage.groupBy(_.coordinate(0)).map { p =>
+      val ridx = p._1
+      val entries = p._2
+
+      val builder = new VectorBuilder[V](cols)
+      entries.foreach(e => builder.add(e.coordinate(1), e.value))
+      IndexedRow(ridx, builder.toDenseVector)
+    }
+
+    IndexedRowMatrix(rows, cols, r)
   }
 
   /***

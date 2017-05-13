@@ -1,4 +1,8 @@
-import breeze.linalg.{norm, DenseMatrix, DenseVector}
+import breeze.linalg.{DenseMatrix, DenseVector, SparseVector, VectorBuilder, det, norm}
+import breeze.math.{Field, Ring, Semiring}
+import breeze.storage.Zero
+
+import scala.reflect.ClassTag
 
 
 class A(val value: Int) {
@@ -99,3 +103,20 @@ val seq = DenseVector(2, 4, 5, 6, 0, 2, 0, 8, 6)
 val normVal = norm(seq)
 seq.foldLeft(0)((acc, e) => acc + e * e)
 seq.map(_ / normVal)
+
+//-------------------------------
+
+val builder = new VectorBuilder[Int](6)
+builder.add(2, 4)
+builder.add(5, 2)
+val sv = builder.toSparseVector
+sv.mapPairs((i, v) => (i, v)).foldLeft("")((acc, p) => acc + ", " + p)
+
+//-------------------------------
+
+5L > Int.MaxValue
+
+//-------------------------------
+
+DenseVector(2, 4, 5) * DenseVector(1, 2).t
+DenseVector(2, 4, 5).t * DenseVector(1, 2, 3)

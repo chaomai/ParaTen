@@ -1,5 +1,7 @@
 package org.chaomai.paratd.tensor
 
+import breeze.linalg.DenseVector
+import org.chaomai.paratd.vector.LocalCoordinateVector
 import org.chaomai.paratd.{Common, UnitSpec}
 
 /**
@@ -18,7 +20,7 @@ class TestCoordinateTensor extends UnitSpec {
     assert(t.shape == dim)
   }
 
-  "A CoordinateTensor" should "get fiber" in {
+  "A CoordinateTensor" should "get fiber from a dense tensor" in {
     val dim = Common.sizeOfDim4DenseTensor
     val t = Common.dim4DenseTensor
 
@@ -33,6 +35,43 @@ class TestCoordinateTensor extends UnitSpec {
 
     Common.debugMessage("fiber on mode 2")
     t.fibersOnMode(2).foreach(println)
+  }
+
+  "A CoordinateTensor" should "get fiber from a dense tensor 1" in {
+    val dim = Common.sizeOfDim4DenseTensor
+    val t = Common.dim4DenseTensor
+
+    println(t)
+
+    assert(t.dimension == dim.length)
+    assert(t.size == dim.product)
+    assert(t.shape == dim)
+
+    Common.debugMessage("fiber on mode 1")
+    t.fibersOnMode1(1).foreach(println)
+
+    Common.debugMessage("fiber on mode 2")
+    t.fibersOnMode1(2).foreach(println)
+  }
+
+  "A CoordinateTensor" should "get fiber from a sparse tensor" in {
+    val t = Common.dim4SparseTensor
+
+    Common.debugMessage("fiber on mode 1")
+    t.fibersOnMode(1).foreach(println)
+
+    Common.debugMessage("fiber on mode 2")
+    t.fibersOnMode(2).foreach(println)
+  }
+
+  "A CoordinateTensor" should "get fiber from a sparse tensor 1" in {
+    val t = Common.dim4SparseTensor
+
+    Common.debugMessage("fiber on mode 1")
+    t.fibersOnMode1(1).foreach(println)
+
+    Common.debugMessage("fiber on mode 2")
+    t.fibersOnMode1(2).foreach(println)
   }
 
   it should "perform n-mode product" in {
@@ -53,24 +92,42 @@ class TestCoordinateTensor extends UnitSpec {
     assert(eOption.get.value == 107)
   }
 
-  it should "perform cp decomposition on a dense tensor" in {
+  it should "perform n-mode product 1" in {
     implicit val sc = Common.sparkContext
 
     val t = Common.dim4DenseTensor
-    val cpRet = CoordinateTensor.paraCP(t, 3, maxIter = 5, tries = 1)
+    val v = sc.broadcast(DenseVector[Double](2, 2, 3))
 
-    val fms = cpRet._1
-    val l = cpRet._2
+    val nModeProd = t nModeProd1 (2, v.value)
 
-    fms.foreach(e => println(e.toDenseMatrix))
-    println(l)
+    println(nModeProd)
+
+    assert(nModeProd.shape == IndexedSeq(2, 2, 1, 2))
+
+    val eOption =
+      nModeProd.find(e => e.coordinate == Coordinate(IndexedSeq(1, 0, 0, 0)))
+    assert(eOption.isDefined)
+    assert(eOption.get.value == 107)
   }
 
+//  it should "perform cp decomposition on a dense tensor" in {
+//    implicit val sc = Common.sparkContext
+//
+//    val t = Common.dim4DenseTensor
+//    val cpRet = CoordinateTensor.paraCP(t, 3, maxIter = 5, tries = 1)
+//
+//    val fms = cpRet._1
+//    val l = cpRet._2
+//
+//    fms.foreach(e => println(e.toDenseMatrix))
+//    println(l)
+//  }
+//
   it should "perform cp decomposition on a sparse tensor" in {
     implicit val sc = Common.sparkContext
 
     val t = Common.dim4SparseTensor
-    val cpRet = CoordinateTensor.paraCP(t, 2, maxIter = 5, tries = 1)
+    val cpRet = CoordinateTensor.paraCP(t, 3, maxIter = 5, tries = 1)
 
     val fms = cpRet._1
     val l = cpRet._2

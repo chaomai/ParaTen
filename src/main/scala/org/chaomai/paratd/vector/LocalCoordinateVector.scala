@@ -1,7 +1,9 @@
-package org.chaomai.paratd.tensor
+package org.chaomai.paratd.vector
 
 import breeze.linalg.{DenseVector, SparseVector, VectorBuilder}
 import breeze.math.Semiring
+import org.chaomai.paratd.tensor.VEntry
+
 import scala.reflect.ClassTag
 
 /**
@@ -11,12 +13,7 @@ class LocalCoordinateVector[
     @specialized(Double, Float, Int, Long) V: ClassTag: Semiring](
     val size: Int,
     private val storage: IndexedSeq[VEntry[V]])
-    extends SparseTensor[V] {
-
-  val shape: IndexedSeq[Int] = IndexedSeq(size)
-  val dimension: Int = 1
-
-  require(shape.length == 1, s"Vector should be 1 dimension")
+    extends Vector {
 
   def head: VEntry[V] = storage.head
 
@@ -36,12 +33,9 @@ class LocalCoordinateVector[
     * @return   inner product.
     */
   def >*(y: CoordinateVector[V])(implicit n: Numeric[V]): V = {
-    val s1 = size
-    val s2 = y.size
-
-    require(s1 == s2,
-            s"Requested inner product, "
-              + s"but got vector1 with size $s1 and vector2 with size $s2")
+    require(size == y.size,
+            s"Requires inner product, "
+              + s"but got v1.size = $size and v2.size = ${y.size}")
 
     val partitionFunc = (iter: Iterator[VEntry[V]]) => {
       iter.map { x =>
@@ -62,10 +56,9 @@ class LocalCoordinateVector[
     * @return   inner product.
     */
   def >*(y: LocalCoordinateVector[V])(implicit n: Numeric[V]): V = {
-    require(
-      size == y.size,
-      s"Requested inner product" +
-        "but got vector1 with size $size and vector2 with size ${y.size}")
+    require(size == y.size,
+            s"Requires inner product, "
+              + s"but got v1.size = $size and v2.size = ${y.size}")
 
     val paired = for {
       a <- storage
