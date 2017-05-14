@@ -112,8 +112,8 @@ class CoordinateMatrix[
             val norm = sqrt(num.toDouble(col.foldLeft(num.zero)((acc, e) =>
               num.plus(acc, num.times(e.value, e.value)))))
 
-            ((idx, norm),
-             col.map(e => TEntry(e.coordinate, normalization(e.value, norm))))
+            ((idx, norm), col.map(_.map(normalization(_, norm))))
+
           }
         }
 
@@ -217,7 +217,7 @@ class CoordinateMatrix[
         val retRowVec = (m(::, BBroadcastingOp) dot v).t
 
         (0 until retRowVec.length)
-          .map(idx => TEntry(Coordinate(p._1, idx), retRowVec(idx)))
+          .map(idx => TEntry((p._1, idx), retRowVec(idx)))
       }
     }
 
@@ -365,7 +365,7 @@ object CoordinateMatrix {
         val v = x._1
         val cidx = x._2
 
-        TEntry(Coordinate(ridx, cidx), v)
+        TEntry((ridx, cidx), v)
       }
     }
 

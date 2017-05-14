@@ -20,7 +20,7 @@ case class Coordinate(coordinate: IndexedSeq[Int]) {
       coordinate.zipWithIndex.filter(p => !idx.contains(p._2)).map(_._1)
     }
 
-  def compose(dims: Int*): Coordinate = Coordinate {
+  def appendDim(dims: Int*): Coordinate = Coordinate {
     coordinate ++ dims.toIndexedSeq
   }
 
@@ -40,6 +40,15 @@ case class Coordinate(coordinate: IndexedSeq[Int]) {
 
 object Coordinate {
   def apply(dims: Int*): Coordinate = new Coordinate(dims.toIndexedSeq)
+
+  implicit def Seq2Coord(dims: Int*): Coordinate = Coordinate(dims: _*)
+
+  implicit def Tuple2Coord(tuple: Product): Coordinate = {
+    val dims = tuple.productIterator.foldLeft(Nil: Seq[Int])((acc, v) =>
+      acc :+ v.asInstanceOf[Int])
+
+    Coordinate(dims: _*)
+  }
 }
 
 sealed trait Entry[V] extends Serializable
@@ -61,9 +70,15 @@ case class TEntry[V: CanUse](coordinate: Coordinate, value: V)
 
   def dimWithout(idx: Int): Coordinate = coordinate.dimWithout(idx)
 
+  def map[U: CanUse](f: V => U): TEntry[U] = TEntry(coordinate, f(value))
+
   override def toString: String = {
     "%s @ %s".format(value.toString, coordinate)
   }
+}
+
+object TEntry {
+  def apply[V: CanUse](dim: Int, v: V): TEntry[V] = TEntry(Coordinate(dim), v)
 }
 
 case class VEntry[V: CanUse](coordinate: Int, value: V) extends Entry[V] {

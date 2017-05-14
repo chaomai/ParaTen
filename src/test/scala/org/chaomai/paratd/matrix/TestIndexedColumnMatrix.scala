@@ -25,12 +25,12 @@ class TestIndexedColumnMatrix extends UnitSpec {
     implicit val sc = Common.sparkContext
     val m = IndexedColumnMatrix.vals(Seq(1, 2), Seq(3, 4), Seq(0, 6))
 
+    println(m.toDenseMatrix)
+    println(m.toCSCMatrix)
+
     assert(m.toDenseMatrix == DenseMatrix((1, 3, 0), (2, 4, 6)))
     assert(m.numRows == 2)
     assert(m.numCols == 3)
-
-    println(m.toDenseMatrix)
-    println(m.toCSCMatrix)
   }
 
   "A IndexedColumnMatrix" should "perform transformation" in {
@@ -38,12 +38,13 @@ class TestIndexedColumnMatrix extends UnitSpec {
     val m = IndexedColumnMatrix.vals(Seq(1, 2), Seq(3, 4), Seq(0, 6))
 
     val mt = m.t
-    assert(mt.numRows == 3)
-    assert(mt.numCols == 2)
-    assert(mt.toDenseMatrix == DenseMatrix((1, 2), (3, 4), (0, 6)))
 
     println(mt.toDenseMatrix)
     println(mt.toCSCMatrix)
+
+    assert(mt.numRows == 3)
+    assert(mt.numCols == 2)
+    assert(mt.toDenseMatrix == DenseMatrix((1, 2), (3, 4), (0, 6)))
   }
 
   it should "perform matrix with transformed IndexedColumnMatrix" in {
@@ -52,8 +53,20 @@ class TestIndexedColumnMatrix extends UnitSpec {
 
     val p = m * m.t
 
+    println(p)
+
     assert(p == DenseMatrix((35, 44), (44, 56)))
+  }
+
+  it should "perform matrix with zero-valued IndexedRowMatrix" in {
+    implicit val sc = Common.sparkContext
+    val m = IndexedColumnMatrix.vals(Seq(1, 2), Seq(3, 4), Seq(5, 6))
+    val m1 = IndexedRowMatrix.zeros[Int](3, 2)
+
+    val p = m * m1
 
     println(p)
+
+    assert(p == DenseMatrix((0, 0), (0, 0)))
   }
 }

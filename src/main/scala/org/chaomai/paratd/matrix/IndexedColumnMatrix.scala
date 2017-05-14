@@ -77,7 +77,7 @@ class IndexedColumnMatrix[
                      numRows,
                      storage.map(col => IndexedRow(col.cidx, col.cvec)))
 
-  def *(m: IndexedRowMatrix[V]): BDM[V] = {
+  def *(m: IndexedRowMatrix[V])(implicit n: Numeric[V]): BDM[V] = {
     require(numCols == m.numRows,
             s"Required matrix product, "
               + s"but the m1.numCols = $numCols and m2.numRows = ${m.numRows}")
@@ -86,8 +86,18 @@ class IndexedColumnMatrix[
     val rows = m.mapStorage(row => (row.ridx, row.rvec))
 
     cols
-      .join(rows)
-      .map(x => x._2._1 * x._2._2.t)
+      .fullOuterJoin(rows)
+      .map { x =>
+        val col = x._2._1
+        val row = x._2._2
+
+        (col, row) match {
+          case (None, None) => sys.error("should not happen")
+          case (Some(_), None) => BDM.zeros[V](numRows, m.numCols)
+          case (None, Some(_)) => BDM.zeros[V](numRows, m.numCols)
+          case (Some(_), Some(_)) => col.get * row.get.t
+        }
+      }
       .reduce(_ + _)
   }
 }

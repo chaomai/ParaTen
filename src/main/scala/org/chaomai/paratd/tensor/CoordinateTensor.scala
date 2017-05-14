@@ -1,6 +1,7 @@
 package org.chaomai.paratd.tensor
 
 import breeze.linalg.{
+  isClose,
   pinv,
   DenseMatrix,
   DenseVector,
@@ -44,27 +45,122 @@ class CoordinateTensor[V: ClassTag: Semiring: CanUse](
   def mapStorage[U: ClassTag](f: TEntry[V] => U): RDD[U] =
     storage.map(f)
 
+  def reduceStorage(f: (TEntry[V], TEntry[V]) => TEntry[V]): TEntry[V] =
+    storage.reduce(f)
+
   def collect: Array[TEntry[V]] = storage.collect()
 
-  def ~=(t: CoordinateTensor[V], tol: Double = 1e-3): (Double, Boolean) = {
-    val t1 = storage.map(e => (e.coordinate, e.value))
-    val t2 = t.storage.map(e => (e.coordinate, e.value))
+  /***
+    * Elementwise approximately equality.
+    *
+    * @param t    another tensor.
+    * @param tol  tolerance.
+    * @param n    implicit Numeric.
+    * @return     equality.
+    */
+  def :~==(t: CoordinateTensor[V], tol: Double = 1e-6)(
+      implicit n: Numeric[V]): Boolean = {
+    if (shape != t.shape) false
+    else {
+      val t1 = storage.map(e => (e.coordinate, e.value))
+      val t2 = t.storage.map(e => (e.coordinate, e.value))
 
-//    t1.fullOuterJoin(t2).map { x =>
-//      val coord = x._1
-//      val e1 = x._2._1
-//      val e2 = x._2._2
-//
-//      (e1, e2) match {
-//        case (None, None) => true
-//        case (None, Some(v))=>
-//      }
-//    }
+      t1.fullOuterJoin(t2)
+        .map { x =>
+          val e1 = x._2._1
+          val e2 = x._2._2
 
-    ???
+          (e1, e2) match {
+            case (None, None) => sys.error("should not happen")
+            case (Some(_), None) => false
+            case (None, Some(_)) => false
+            case (Some(_), Some(_)) =>
+              isClose(n.toDouble(e1.get), n.toDouble(e2.get), tol)
+          }
+        }
+        .reduce(_ && _)
+    }
   }
 
-  def <*(v: DenseVector[V]): CoordinateTensor[V] = ???
+  /***
+    * Elementwise addition.
+    *
+    * @param t  another tensor.
+    * @param n  implicit Numeric.
+    * @return   addition result.
+    */
+  def :+(t: CoordinateTensor[V])(implicit n: Numeric[V]): CoordinateTensor[V] =
+    CoordinateTensorOps.elementwiseOp(this, t)(n.plus)(v => v)(v => v)
+
+  /***
+    * Scalar addition.
+    *
+    * @param s  another tensor.
+    * @param n  implicit Numeric.
+    * @return   plus result.
+    */
+  def :+(s: V)(implicit n: Numeric[V]): CoordinateTensor[V] =
+    map(_.map(n.plus(_, s)))
+
+  /***
+    * Elementwise subtraction.
+    *
+    * @param t  another tensor.
+    * @param n  implicit Numeric.
+    * @return   minus result.
+    */
+  def :-(t: CoordinateTensor[V])(implicit n: Numeric[V]): CoordinateTensor[V] =
+    CoordinateTensorOps.elementwiseOp(this, t)(n.minus)(v => v)(v => v)
+
+  /***
+    * Scalar subtraction.
+    *
+    * @param s  another tensor.
+    * @param n  implicit Numeric.
+    * @return   minus result.
+    */
+  def :-(s: V)(implicit n: Numeric[V]): CoordinateTensor[V] =
+    map(_.map(n.minus(_, s)))
+
+  /***
+    * Elementwise production.
+    *
+    * @param t  another tensor.
+    * @param n  implicit Numeric.
+    * @return   times result.
+    */
+  def :*(t: CoordinateTensor[V])(implicit n: Numeric[V]): CoordinateTensor[V] =
+    CoordinateTensorOps.elementwiseOp(this, t)(n.times)(v => v)(v => v)
+
+  /***
+    * Scalar production.
+    *
+    * @param s  another tensor.
+    * @param n  implicit Numeric.
+    * @return   times result.
+    */
+  def :*(s: V)(implicit n: Numeric[V]): CoordinateTensor[V] =
+    map(_.map(n.times(_, s)))
+
+  /***
+    * Outer product with vector.
+    *
+    * @param vec  vector.
+    * @param n  implicit Numeric.
+    * @return   outer product result.
+    */
+  def <*(vec: DenseVector[V])(implicit n: Numeric[V]): CoordinateTensor[V] = {
+    val t = storage.flatMap { e =>
+      val coord = e.coordinate
+      val ev = e.value
+
+      vec.mapPairs { (idx, v) =>
+        TEntry(coord appendDim idx, n.times(v, ev))
+      }.toArray
+    }
+
+    CoordinateTensor(shape :+ vec.length, t)
+  }
 
   /***
     * n mode product with vector
@@ -125,14 +221,17 @@ object CoordinateTensor {
     val rank = facMats.head.numCols
 
     val initfmat = CoordinateMatrix.zeros[Double](shape(dim), rank)
-    val krProdMatIdx = facMats.indices.filter(_ != dim)
+    val krProdMatIdxs = facMats.indices.filter(_ != dim)
 
     val fmat = (0 until rank).foldLeft(initfmat) { (accmat, r) =>
-      val tmpten = krProdMatIdx.foldLeft(tensor) { (accten, idx) =>
-        accten nModeProd (idx, sc.broadcast(facMats(idx).localColAt(r)).value)
+      val tmpten = krProdMatIdxs.foldLeft(tensor) { (accten, idx) =>
+        val breadCol = sc.broadcast(facMats(idx).localColAt(r))
+        val prod = accten nModeProd (idx, breadCol.value)
+        breadCol.unpersist()
+        prod
       }
       accmat.addEntry(tmpten.storage.map(e =>
-        TEntry(e.coordinate dimKept dim compose r, e.value)))
+        TEntry(e.coordinate dimKept dim appendDim r, e.value)))
     }
 
     fmat.toIndexedRowMatrix
@@ -141,13 +240,14 @@ object CoordinateTensor {
   private def paraOuterPinv(facMats: IndexedSeq[IndexedRowMatrix[Double]],
                             dim: Int): DenseMatrix[Double] = {
     val rank = facMats.head.numCols
-    val outerProdMatIdx = facMats.indices.filter(_ != dim)
+    val outerProdMatIdxs = facMats.indices.filter(_ != dim)
 
-    val prod = outerProdMatIdx.foldLeft(DenseMatrix.ones[Double](rank, rank)) {
-      (acc, idx) =>
-        val fm = facMats(idx)
-        acc :* (fm.t * fm)
-    }
+    val prod =
+      outerProdMatIdxs.foldLeft(DenseMatrix.ones[Double](rank, rank)) {
+        (acc, idx) =>
+          val fm = facMats(idx)
+          acc :* (fm.t * fm)
+      }
 
     pinv(prod)
   }
@@ -156,7 +256,9 @@ object CoordinateTensor {
                              m: DenseMatrix[Double])(
       implicit sc: SparkContext): IndexedRowMatrix[Double] = {
     val broadm = sc.broadcast(m)
-    decopkr * broadm.value
+    val prod = decopkr * broadm.value
+    broadm.unpersist()
+    prod
   }
 
   /***
@@ -185,7 +287,7 @@ object CoordinateTensor {
     var optimalReconsLoss: Double = Double.PositiveInfinity
 
     for (_ <- 0 until tries) {
-      var factorMats = shape.map(
+      var facMats = shape.map(
         IndexedRowMatrix
           .rand[Double](_, rank, Gaussian(mu = 0.0, sigma = 1.0)))
 
@@ -194,31 +296,30 @@ object CoordinateTensor {
       var lambda = DenseVector.zeros[Double](rank)
 
       var iter = 0
-      while ((iter < maxIter) || (prevHead ~= factorMats.head)) {
+      while ((iter < maxIter) || (prevHead :~== facMats.head)) {
         iter += 1
 
         for (idx <- shape.indices) {
-          val decopkr = decoupledKR(tensor, factorMats, idx)
-          val pinv = paraOuterPinv(factorMats, idx)
+          val decopkr = decoupledKR(tensor, facMats, idx)
+          val pinv = paraOuterPinv(facMats, idx)
           val fm = paraMatrixProd(decopkr, pinv)
 
           val (m, l) = fm.normalizeByCol
 
-          factorMats = factorMats.updated(idx, m)
+          facMats = facMats.updated(idx, m)
           lambda = l
         }
       }
 
       // set current best
-      val p = tensor ~= fromFacMats(shape, rank, factorMats, lambda)
-      reconsLoss = p._1
-      val isClose = p._2
+//      reconsLoss = ???
+//      tensor :- CoordinateTensor.fromFacMats(shape, rank, facMats, lambda)
 
-      if (reconsLoss < optimalReconsLoss) {
-        optimalFacMats = factorMats
+//      if (reconsLoss < optimalReconsLoss) {
+        optimalFacMats = facMats
         optimalLambda = lambda
         optimalReconsLoss = reconsLoss
-      }
+//      }
     }
 
     (optimalFacMats, optimalLambda)
@@ -229,10 +330,25 @@ object CoordinateTensor {
     CoordinateTensor(sv, sc.emptyRDD[TEntry[V]])
   }
 
+  def vals[V: ClassTag: Semiring: CanUse](sv: IndexedSeq[Int], vs: TEntry[V]*)(
+      implicit sc: SparkContext): CoordinateTensor[V] =
+    CoordinateTensor[V](sv, sc.parallelize(vs))
+
   def apply[V: ClassTag: Semiring: CanUse](
       sv: IndexedSeq[Int],
       rdd: RDD[TEntry[V]]): CoordinateTensor[V] = {
     new CoordinateTensor[V](sv, rdd)
+  }
+
+  def fromDenseVector[V: ClassTag: Semiring: CanUse](
+      sv: Int,
+      v: DenseVector[V])(implicit sc: SparkContext): CoordinateTensor[V] = {
+    val entries = v
+      .mapPairs((idx, v) => TEntry(idx, v))
+      .toArray
+      .toSeq
+
+    CoordinateTensor(IndexedSeq(sv), sc.parallelize(entries))
   }
 
   def fromFile(path: String, sv: IndexedSeq[Int])(
@@ -254,16 +370,56 @@ object CoordinateTensor {
                   mats: IndexedSeq[IndexedRowMatrix[Double]],
                   lambda: DenseVector[Double])(
       implicit sc: SparkContext): CoordinateTensor[Double] = {
-    val tensor = CoordinateTensor.zero[Double](shape)
+    (0 until rank).foldLeft(CoordinateTensor.zero[Double](shape)) {
+      (accten, r) =>
+        val initTen =
+          CoordinateTensor.fromDenseVector(shape(0), mats.head.localColAt(r))
 
-    for (r <- 0 until rank) {
+        val facMatsIdxs = mats.indices.tail
 
-      var accTen = CoordinateTensor.zero[Double](shape)
-      for (m <- mats) {
-        accTen <* m.localColAt(r)
-      }
+        val tmpten = facMatsIdxs.foldLeft(initTen) { (acc, idx) =>
+          val broadRow = sc.broadcast(mats(idx).localColAt(r))
+          val prod = acc <* broadRow.value
+          broadRow.unpersist()
+          prod
+        }
+
+        accten :+ (tmpten :* lambda(r))
     }
+  }
+}
 
-    ???
+private object CoordinateTensorOps {
+  def elementwiseOp[V: ClassTag: Semiring: CanUse,
+                    U: ClassTag: Semiring: CanUse,
+                    W: ClassTag: Semiring: CanUse](t1: CoordinateTensor[V],
+                                                   t2: CoordinateTensor[U])(
+      f1: (V, U) => W)(f2: V => W)(f3: U => W): CoordinateTensor[W] = {
+    require(t1.shape == t2.shape,
+            s"Required elementwise operation, " +
+              s"but get t1.shape = ${t1.shape} and t2.shape = ${t2.shape}")
+
+    val shape = t1.shape
+
+    val tp1 = t1.mapStorage(e => (e.coordinate, e.value))
+    val tp2 = t2.mapStorage(e => (e.coordinate, e.value))
+
+    val tn = tp1
+      .fullOuterJoin(tp2)
+      .map { x =>
+        val coord = x._1
+        val e1 = x._2._1
+        val e2 = x._2._2
+
+        (e1, e2) match {
+          case (None, None) => sys.error("should not happen")
+          case (Some(_), None) => TEntry(coord, f2(e1.get))
+          case (None, Some(_)) => TEntry(coord, f3(e2.get))
+          case (Some(_), Some(_)) =>
+            TEntry(coord, f1(e1.get, e2.get))
+        }
+      }
+
+    CoordinateTensor(shape, tn)
   }
 }

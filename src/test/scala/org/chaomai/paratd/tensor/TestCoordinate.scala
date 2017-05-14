@@ -7,17 +7,21 @@ import org.chaomai.paratd.UnitSpec
   */
 class TestCoordinate extends UnitSpec {
   "A Coordinate" should "get coordinate without some dimension" in {
-    val c = Coordinate(IndexedSeq(0, 1, 2, 3, 4, 5, 6))
+    val c = Coordinate(0, 1, 2, 3, 4, 5, 6)
     assert(c.dimWithout(3, 4).coordinate == IndexedSeq(0, 1, 2, 5, 6))
   }
 
   it should "get coordinate with some dimension kept" in {
-    val c = Coordinate(IndexedSeq(0, 1, 2, 3, 4, 5, 6))
+    val c = Coordinate(0, 1, 2, 3, 4, 5, 6)
     assert(c.dimKept(3, 4).coordinate == IndexedSeq(3, 4))
   }
 
   it should "compose with indexes" in {
-    val c = Coordinate(IndexedSeq(0, 1, 2, 3))
-    assert(c.compose(4, 5, 6).coordinate == IndexedSeq(0, 1, 2, 3, 4, 5, 6))
+    val c = Coordinate(0, 1, 2, 3)
+    assert(c.appendDim(4, 5, 6).coordinate == IndexedSeq(0, 1, 2, 3, 4, 5, 6))
+  }
+
+  "A TEntry" should "not build entry with wrong type" in {
+    assertDoesNotCompile("TEntry((1, 2, 3), \"wrong\")")
   }
 }

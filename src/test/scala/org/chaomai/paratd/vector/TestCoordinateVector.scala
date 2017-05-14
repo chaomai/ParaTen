@@ -6,18 +6,7 @@ import org.chaomai.paratd.{Common, UnitSpec}
   * Created by chaomai on 02/05/2017.
   */
 class TestCoordinateVector extends UnitSpec {
-  "A CoordinateVector" should "perform dot product" in {
-    implicit val sc = Common.sparkContext
-    val v1 = CoordinateVector.vals(1, 2, 3, 4, 5)
-    val v2 = CoordinateVector.vals(1, 2, 3, 4, 5)
-
-    v1.foreach(println)
-    v2.foreach(println)
-
-//    println(v1 >* v2)
-  }
-
-  it should "mapPartitions" in {
+  "A CoordinateVector" should "mapPartitions" in {
     implicit val sc = Common.sparkContext
     val v1 = CoordinateVector.vals(1, 2, 3, 4, 5)
 

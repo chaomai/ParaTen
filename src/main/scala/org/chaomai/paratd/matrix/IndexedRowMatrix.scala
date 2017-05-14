@@ -106,6 +106,19 @@ class IndexedRowMatrix[
     storage.filter(row => row.ridx == ridx).map(row => row.rvec)
 
   /***
+    * Get the ridx th row.
+    *
+    * @param ridx row index.
+    * @return     row vector.
+    */
+  def localRowAt(ridx: Long): BDV[V] =
+    storage
+      .filter(row => row.ridx == ridx)
+      .map(row => row.rvec)
+      .collect()
+      .head
+
+  /***
     * Get the cidx th column.
     *
     * 1. Operation can be expensive.
@@ -207,16 +220,29 @@ class IndexedRowMatrix[
       case _ => sys.error("Operation on unsupported type.")
     }
 
-  def ~=(m: IndexedRowMatrix[V], tol: Double = 1e-3)(
+  def :~==(m: IndexedRowMatrix[V], tol: Double = 1e-6)(
       implicit n: Numeric[V]): Boolean = {
     if ((numRows != m.numRows) || (numCols != m.numCols)) false
     else {
       val rows1 = storage.map(row => (row.ridx, row.rvec))
       val rows2 = m.storage.map(row => (row.ridx, row.rvec))
+
       rows1
-        .join(rows2)
-        .map(x =>
-          isClose(x._2._1.map(n.toDouble), x._2._2.map(n.toDouble), tol))
+        .fullOuterJoin(rows2)
+        .map { x =>
+          val rvec1 = x._2._1
+          val rvec2 = x._2._2
+
+          (rvec1, rvec2) match {
+            case (None, None) => sys.error("should not happen")
+            case (Some(_), None) => false
+            case (None, Some(_)) => false
+            case (Some(_), Some(_)) =>
+              isClose(rvec1.get.map(n.toDouble),
+                      rvec2.get.map(n.toDouble),
+                      tol)
+          }
+        }
         .reduce(_ && _)
     }
   }

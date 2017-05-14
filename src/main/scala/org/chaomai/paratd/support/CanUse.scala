@@ -1,8 +1,12 @@
 package org.chaomai.paratd.support
 
+import scala.annotation.implicitNotFound
+
 /**
   * Created by chaomai on 14/05/2017.
   */
+
+@implicitNotFound("The type supplied is not usable.")
 sealed trait CanUse[T] extends Serializable
 
 object CanUse {

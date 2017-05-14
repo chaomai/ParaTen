@@ -25,12 +25,12 @@ class TestIndexedRowMatrix extends UnitSpec {
     implicit val sc = Common.sparkContext
     val m = IndexedRowMatrix.vals(Seq(1, 2), Seq(3, 4), Seq(0, 6))
 
+    println(m.toDenseMatrix)
+    println(m.toCSCMatrix)
+
     assert(m.toDenseMatrix == DenseMatrix((1, 2), (3, 4), (0, 6)))
     assert(m.numRows == 3)
     assert(m.numCols == 2)
-
-    println(m.toDenseMatrix)
-    println(m.toCSCMatrix)
   }
 
   "A IndexedRowMatrix" should "get column" in {
@@ -45,12 +45,13 @@ class TestIndexedRowMatrix extends UnitSpec {
     val m = IndexedRowMatrix.vals(Seq(1, 2), Seq(3, 4), Seq(0, 6))
 
     val mt = m.t
-    assert(mt.numRows == 2)
-    assert(mt.numCols == 3)
-    assert(mt.toDenseMatrix == DenseMatrix((1, 2), (3, 4), (0, 6)).t)
 
     println(mt.toDenseMatrix)
     println(mt.toCSCMatrix)
+
+    assert(mt.numRows == 2)
+    assert(mt.numCols == 3)
+    assert(mt.toDenseMatrix == DenseMatrix((1, 2), (3, 4), (0, 6)).t)
   }
 
   it should "perform matrix product with DenseMatrix" in {
@@ -60,9 +61,9 @@ class TestIndexedRowMatrix extends UnitSpec {
 
     val p = m * dm
 
-    assert(p.toDenseMatrix == DenseMatrix((7, 10), (15, 22), (23, 34)))
-
     println(p.toDenseMatrix)
+
+    assert(p.toDenseMatrix == DenseMatrix((7, 10), (15, 22), (23, 34)))
   }
 
   it should "perform matrix product with transformed IndexedRowMatrix" in {
@@ -71,10 +72,10 @@ class TestIndexedRowMatrix extends UnitSpec {
 
     val p = m * m.t
 
+    println(p.toDenseMatrix)
+
     assert(
       p.toDenseMatrix == DenseMatrix((5, 11, 17), (11, 25, 39), (17, 39, 61)))
-
-    println(p.toDenseMatrix)
   }
 
   it should "perform transformed matrix product with IndexedRowMatrix" in {
@@ -83,9 +84,9 @@ class TestIndexedRowMatrix extends UnitSpec {
 
     val p = m.t * m
 
-    assert(p == DenseMatrix((35, 44), (44, 56)))
-
     println(p.toDenseMatrix)
+
+    assert(p == DenseMatrix((35, 44), (44, 56)))
   }
 
   it should "perform normalization" in {
@@ -104,11 +105,11 @@ class TestIndexedRowMatrix extends UnitSpec {
       nm1(::, i) :/= n1(i)
     }
 
-    assert(nm.toDenseMatrix == nm1)
-    assert(n == n1.t)
-
     println(nm1)
     println(n1)
+
+    assert(nm.toDenseMatrix == nm1)
+    assert(n == n1.t)
   }
 
   it should "check equality" in {
@@ -119,8 +120,10 @@ class TestIndexedRowMatrix extends UnitSpec {
       IndexedRowMatrix.vals(Seq(0.1, 0.2), Seq(0.3, 0.3997), Seq(0.5, 0.6))
     val m3 =
       IndexedRowMatrix.vals(Seq(0.1, 0.2), Seq(0.3, 0.4), Seq(0.3, 0.6))
+    val m4 = IndexedRowMatrix.zeros[Double](3, 2)
 
-    assert(m1 ~= m2)
-    assert(!(m1 ~= m3))
+    assert(m1 :~== m2)
+    assert(!(m1 :~== m3))
+    assert(!(m1 :~== m4))
   }
 }
