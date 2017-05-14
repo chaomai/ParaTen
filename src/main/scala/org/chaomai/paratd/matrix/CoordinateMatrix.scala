@@ -1,7 +1,16 @@
 package org.chaomai.paratd.matrix
 
 import breeze.linalg.operators.OpMulInner
-import breeze.linalg.{BroadcastedColumns, CSCMatrix, DenseMatrix, DenseVector, Transpose, VectorBuilder, * => broadcastingOp}
+import breeze.linalg.{
+  BroadcastedColumns,
+  CSCMatrix => BCSCM,
+  DenseMatrix => BDM,
+  DenseVector => BDV,
+  SparseVector => BSV,
+  Transpose => BT,
+  VectorBuilder => BVB,
+  * => BBroadcastingOp
+}
 import breeze.math.Semiring
 import breeze.numerics.sqrt
 import breeze.stats.distributions.Rand
@@ -10,7 +19,7 @@ import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
 import org.chaomai.paratd.tensor.{Coordinate, Entry, TEntry}
 import org.chaomai.paratd.support.{CanUse, NotNothing}
-import org.chaomai.paratd.vector.{CoordinateVector, LocalCoordinateVector}
+import org.chaomai.paratd.vector.CoordinateVector
 
 import scala.reflect.ClassTag
 
@@ -49,7 +58,7 @@ class CoordinateMatrix[
     *
     * @return DenseMatrix.
     */
-  def toDenseMatrix: DenseMatrix[V] =
+  def toDenseMatrix: BDM[V] =
     toCSCMatrix.toDenseMatrix
 
   /***
@@ -58,8 +67,8 @@ class CoordinateMatrix[
     *
     * @return   CSCMatrix.
     */
-  def toCSCMatrix: CSCMatrix[V] = {
-    val builder = new CSCMatrix.Builder[V](rows, cols)
+  def toCSCMatrix: BCSCM[V] = {
+    val builder = new BCSCM.Builder[V](rows, cols)
 
     storage.collect().foreach { e =>
       val r = e.coordinate(0)
@@ -75,7 +84,7 @@ class CoordinateMatrix[
       val ridx = p._1
       val entries = p._2
 
-      val builder = new VectorBuilder[V](cols)
+      val builder = new BVB[V](cols)
       entries.foreach(e => builder.add(e.coordinate(1), e.value))
       IndexedRow(ridx, builder.toDenseVector)
     }
@@ -89,39 +98,40 @@ class CoordinateMatrix[
     * @param n  implicit Numeric.
     * @return   column normalized matrix and weights of columns.
     */
-  def normalizeByCol(implicit n: Numeric[V])
-    : (CoordinateMatrix[Double], DenseVector[Double]) = n match {
-    case num: Fractional[V] => {
-      val normalization = (v: V, norm: Double) => num.toDouble(v) / norm
-      val colVecs = storage.groupBy(_.coordinate(1))
+  def normalizeByCol(
+      implicit n: Numeric[V]): (CoordinateMatrix[Double], BDV[Double]) =
+    n match {
+      case num: Fractional[V] => {
+        val normalization = (v: V, norm: Double) => num.toDouble(v) / norm
+        val colVecs = storage.groupBy(_.coordinate(1))
 
-      val partitionFunc = (iter: Iterator[(Int, Iterable[TEntry[V]])]) => {
-        iter.map { p =>
-          val idx = p._1
-          val col = p._2
-          val norm = sqrt(num.toDouble(col.foldLeft(num.zero)((acc, e) =>
-            num.plus(acc, num.times(e.value, e.value)))))
+        val partitionFunc = (iter: Iterator[(Int, Iterable[TEntry[V]])]) => {
+          iter.map { p =>
+            val idx = p._1
+            val col = p._2
+            val norm = sqrt(num.toDouble(col.foldLeft(num.zero)((acc, e) =>
+              num.plus(acc, num.times(e.value, e.value)))))
 
-          ((idx, norm),
-           col.map(e => TEntry(e.coordinate, normalization(e.value, norm))))
+            ((idx, norm),
+             col.map(e => TEntry(e.coordinate, normalization(e.value, norm))))
+          }
         }
+
+        val norms = colVecs
+          .mapPartitions(partitionFunc)
+          .flatMap(e => Iterator.single(e._1))
+
+        val entries = colVecs.mapPartitions(partitionFunc).flatMap(_._2)
+
+        val builder = new BVB[Double](cols)
+        norms.collect.foreach(p => builder.add(p._1, p._2))
+
+        val normVec = builder.toDenseVector
+
+        (CoordinateMatrix(rows, cols, entries), normVec)
       }
-
-      val norms = colVecs
-        .mapPartitions(partitionFunc)
-        .flatMap(e => Iterator.single(e._1))
-
-      val entries = colVecs.mapPartitions(partitionFunc).flatMap(_._2)
-
-      val builder = new VectorBuilder[Double](cols)
-      norms.collect.foreach(p => builder.add(p._1, p._2))
-
-      val normVec = builder.toDenseVector
-
-      (CoordinateMatrix(rows, cols, entries), normVec)
+      case _ => sys.error("Operation on unsupported type.")
     }
-    case _ => sys.error("Operation on unsupported type.")
-  }
 
   /***
     * matrix.t * matrix.
@@ -129,7 +139,7 @@ class CoordinateMatrix[
     * @param n  implicit Numeric.
     * @return   product.
     */
-  def tProd(implicit n: Numeric[V]): DenseMatrix[V] = {
+  def tProd(implicit n: Numeric[V]): BDM[V] = {
     require(rows > 0 && cols > 0,
             s"Required tProd, " + s"but the size is $rows and $cols")
 
@@ -143,14 +153,14 @@ class CoordinateMatrix[
           else n.zero
         }
 
-        val v = DenseVector(as: _*)
+        val v = BDV(as: _*)
         v * v.t
       }
     }
 
     rowsVecs
       .mapPartitions(partitionFunc)
-      .fold(DenseMatrix.zeros(cols, cols))((a, b) => a + b)
+      .fold(BDM.zeros(cols, cols))((a, b) => a + b)
   }
 
   /***
@@ -160,10 +170,9 @@ class CoordinateMatrix[
     * @param n  implicit Numeric.
     * @return   product.
     */
-  def *(m: DenseMatrix[V])(implicit n: Numeric[V]): CoordinateMatrix[V] = {
-    class OpMulInnerVecImpl2
-        extends OpMulInner.Impl2[DenseVector[V], DenseVector[V], V] {
-      override def apply(v1: DenseVector[V], v2: DenseVector[V]): V = {
+  def *(m: BDM[V])(implicit n: Numeric[V]): CoordinateMatrix[V] = {
+    class OpMulInnerVecImpl2 extends OpMulInner.Impl2[BDV[V], BDV[V], V] {
+      override def apply(v1: BDV[V], v2: BDV[V]): V = {
         require(
           v1.length == v2.length,
           s"Required dot product of two vector,"
@@ -175,18 +184,16 @@ class CoordinateMatrix[
     }
 
     class OpMulInnerImpl2
-        extends OpMulInner.Impl2[
-          BroadcastedColumns[DenseMatrix[V], DenseVector[V]],
-          DenseVector[V],
-          Transpose[DenseVector[V]]] {
-      override def apply(
-          v1: BroadcastedColumns[DenseMatrix[V], DenseVector[V]],
-          v2: DenseVector[V]): Transpose[DenseVector[V]] = {
+        extends OpMulInner.Impl2[BroadcastedColumns[BDM[V], BDV[V]],
+                                 BDV[V],
+                                 BT[BDV[V]]] {
+      override def apply(v1: BroadcastedColumns[BDM[V], BDV[V]],
+                         v2: BDV[V]): BT[BDV[V]] = {
         implicit val op = new OpMulInnerVecImpl2
 
         val s =
           v1.toIndexedSeq.foldLeft(Seq[V]())((acc, v) => acc :+ (v dot v2))
-        DenseVector(s: _*).t
+        BDV(s: _*).t
       }
     }
 
@@ -206,8 +213,8 @@ class CoordinateMatrix[
           else n.zero
         }
 
-        val v = DenseVector(as: _*)
-        val retRowVec = (m(::, broadcastingOp) dot v).t
+        val v = BDV(as: _*)
+        val retRowVec = (m(::, BBroadcastingOp) dot v).t
 
         (0 until retRowVec.length)
           .map(idx => TEntry(Coordinate(p._1, idx), retRowVec(idx)))
@@ -240,13 +247,19 @@ class CoordinateMatrix[
     * @param idx  row index.
     * @return     row vector.
     */
-  def localRowAt(idx: Int): LocalCoordinateVector[V] = {
+  def localRowAt(idx: Int): BSV[V] = {
     require(rows > idx, s"Required row at $idx, but matrix has $rows rows")
 
-    val rowVec = storage
+    val builder = new BVB[V](cols)
+
+    storage
       .filter(e => e.coordinate(0) == idx)
       .collect()
-    LocalCoordinateVector(cols, rowVec.map(Entry.TEntry2VEntryOnDim(1, _)))
+      .foreach { e =>
+        builder.add(e.coordinate(1), e.value)
+      }
+
+    builder.toSparseVector
   }
 
   /***
@@ -269,13 +282,17 @@ class CoordinateMatrix[
     * @param idx  column index.
     * @return     column vector.
     */
-  def localColAt(idx: Int): LocalCoordinateVector[V] = {
+  def localColAt(idx: Int): BSV[V] = {
     require(cols > idx, s"Required row at $idx, but matrix has $cols columns")
+
+    val builder = new BVB[V](rows)
 
     val colVec = storage
       .filter(e => e.coordinate(1) == idx)
       .collect()
-    LocalCoordinateVector(rows, colVec.map(Entry.TEntry2VEntryOnDim(0, _)))
+      .foreach(e => builder.add(e.coordinate(0), e.value))
+
+    builder.toSparseVector
   }
 
   def apply(dim: Int*): V = {
@@ -325,7 +342,7 @@ object CoordinateMatrix {
       cols: Int,
       rand: Rand[V] = Rand.uniform)(
       implicit sc: SparkContext): CoordinateMatrix[V] = {
-    val m = DenseMatrix.rand[V](rows, cols, rand)
+    val m = BDM.rand[V](rows, cols, rand)
 
     val entries = for {
       r <- 0 until rows

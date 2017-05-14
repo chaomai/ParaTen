@@ -135,7 +135,7 @@ object CoordinateTensor {
   }
 
   private def paraOuterPinv(facMats: IndexedSeq[IndexedRowMatrix[Double]],
-                             dim: Int): DenseMatrix[Double] = {
+                            dim: Int): DenseMatrix[Double] = {
     val rank = facMats.head.numCols
     val outerProdMatIdx = facMats.indices.filter(_ != dim)
 
@@ -149,7 +149,7 @@ object CoordinateTensor {
   }
 
   private def paraMatrixProd(decopkr: IndexedRowMatrix[Double],
-                              m: DenseMatrix[Double])(
+                             m: DenseMatrix[Double])(
       implicit sc: SparkContext): IndexedRowMatrix[Double] = {
     val broadm = sc.broadcast(m)
     decopkr * broadm.value
