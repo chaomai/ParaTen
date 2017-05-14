@@ -1,9 +1,4 @@
-import breeze.linalg.{DenseMatrix, DenseVector, SparseVector, VectorBuilder, det, norm}
-import breeze.math.{Field, Ring, Semiring}
-import breeze.storage.Zero
-import org.chaomai.paratd.vector.LocalSparseVector
-
-import scala.reflect.ClassTag
+import breeze.linalg.{DenseMatrix, DenseVector, VectorBuilder, norm}
 
 
 class A(val value: Int) {

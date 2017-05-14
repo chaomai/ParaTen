@@ -1,13 +1,19 @@
 package org.chaomai.paratd.tensor
 
-import breeze.linalg.{pinv, DenseMatrix, DenseVector}
+import breeze.linalg.{
+  pinv,
+  DenseMatrix,
+  DenseVector,
+  SparseVector,
+  VectorBuilder
+}
 import breeze.math.Semiring
 import breeze.stats.distributions.Gaussian
 import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
 import org.chaomai.paratd.matrix.{CoordinateMatrix, IndexedRowMatrix}
 import org.chaomai.paratd.support.CanUse
-import org.chaomai.paratd.vector.LocalSparseVector
+import org.chaomai.paratd.vector.LocalVector
 
 import scala.reflect.ClassTag
 
@@ -72,7 +78,7 @@ class CoordinateTensor[V: ClassTag: Semiring: CanUse](
     val fibers = fibersOnMode(m)
     val newEntries = fibers.map { p =>
       val (fi, coord) = (p._1, p._2)
-      val prod = fi >* v
+      val prod = LocalVector.>*(fi, v)
       TEntry(coord, prod)
     }
     CoordinateTensor(shape.updated(m, 1), newEntries)
@@ -84,19 +90,17 @@ class CoordinateTensor[V: ClassTag: Semiring: CanUse](
     * @param m  mode.
     * @return   entries of fibers.
     */
-  def fibersOnMode(m: Int): RDD[(LocalSparseVector[V], Coordinate)] = {
+  def fibersOnMode(m: Int): RDD[(SparseVector[V], Coordinate)] = {
     storage
       .groupBy(e => e.coordinate.updated(m, 0))
       .map { p =>
         val (coordOfFiber, entries) = (p._1, p._2)
+        val builder = new VectorBuilder[V](shape(m))
 
-        val values = entries
-          .map(Entry.TEntry2VEntryOnDim(m, _))
-          .map(e => (e.coordinate, e.value))
-          .toSeq
+        entries.foreach(e => builder.add(e.coordinate(m), e.value))
 
-        val lsv = LocalSparseVector.builder(shape(m), values: _*)
-        (lsv, coordOfFiber)
+        val sv = builder.toSparseVector()
+        (sv, coordOfFiber)
       }
   }
 
