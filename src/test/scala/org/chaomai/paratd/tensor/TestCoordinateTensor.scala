@@ -1,7 +1,6 @@
 package org.chaomai.paratd.tensor
 
 import breeze.linalg.DenseVector
-import org.chaomai.paratd.vector.LocalCoordinateVector
 import org.chaomai.paratd.{Common, UnitSpec}
 
 /**
@@ -37,23 +36,6 @@ class TestCoordinateTensor extends UnitSpec {
     t.fibersOnMode(2).foreach(println)
   }
 
-  "A CoordinateTensor" should "get fiber from a dense tensor 1" in {
-    val dim = Common.sizeOfDim4DenseTensor
-    val t = Common.dim4DenseTensor
-
-    println(t)
-
-    assert(t.dimension == dim.length)
-    assert(t.size == dim.product)
-    assert(t.shape == dim)
-
-    Common.debugMessage("fiber on mode 1")
-    t.fibersOnMode1(1).foreach(println)
-
-    Common.debugMessage("fiber on mode 2")
-    t.fibersOnMode1(2).foreach(println)
-  }
-
   "A CoordinateTensor" should "get fiber from a sparse tensor" in {
     val t = Common.dim4SparseTensor
 
@@ -64,41 +46,13 @@ class TestCoordinateTensor extends UnitSpec {
     t.fibersOnMode(2).foreach(println)
   }
 
-  "A CoordinateTensor" should "get fiber from a sparse tensor 1" in {
-    val t = Common.dim4SparseTensor
-
-    Common.debugMessage("fiber on mode 1")
-    t.fibersOnMode1(1).foreach(println)
-
-    Common.debugMessage("fiber on mode 2")
-    t.fibersOnMode1(2).foreach(println)
-  }
-
   it should "perform n-mode product" in {
-    implicit val sc = Common.sparkContext
-
-    val t = Common.dim4DenseTensor
-    val v = sc.broadcast(LocalCoordinateVector.vals[Double](2, 2, 3))
-
-    val nModeProd = t nModeProd (2, v.value)
-
-    println(nModeProd)
-
-    assert(nModeProd.shape == IndexedSeq(2, 2, 1, 2))
-
-    val eOption =
-      nModeProd.find(e => e.coordinate == Coordinate(IndexedSeq(1, 0, 0, 0)))
-    assert(eOption.isDefined)
-    assert(eOption.get.value == 107)
-  }
-
-  it should "perform n-mode product 1" in {
     implicit val sc = Common.sparkContext
 
     val t = Common.dim4DenseTensor
     val v = sc.broadcast(DenseVector[Double](2, 2, 3))
 
-    val nModeProd = t nModeProd1 (2, v.value)
+    val nModeProd = t nModeProd (2, v.value)
 
     println(nModeProd)
 
@@ -114,7 +68,7 @@ class TestCoordinateTensor extends UnitSpec {
     implicit val sc = Common.sparkContext
 
     val t = Common.dim4DenseTensor
-    val cpRet = CoordinateTensor.paraCP1(t, 3, maxIter = 5, tries = 1)
+    val cpRet = CoordinateTensor.paraCP(t, 3, maxIter = 5, tries = 1)
 
     val fms = cpRet._1
     val l = cpRet._2
@@ -127,7 +81,7 @@ class TestCoordinateTensor extends UnitSpec {
     implicit val sc = Common.sparkContext
 
     val t = Common.dim4SparseTensor
-    val cpRet = CoordinateTensor.paraCP1(t, 3, maxIter = 5, tries = 1)
+    val cpRet = CoordinateTensor.paraCP(t, 3, maxIter = 5, tries = 1)
 
     val fms = cpRet._1
     val l = cpRet._2

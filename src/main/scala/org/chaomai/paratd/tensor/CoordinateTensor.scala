@@ -7,7 +7,7 @@ import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
 import org.chaomai.paratd.matrix.{CoordinateMatrix, IndexedRowMatrix}
 import org.chaomai.paratd.support.CanUse
-import org.chaomai.paratd.vector.{LocalCoordinateVector, LocalSparseVector}
+import org.chaomai.paratd.vector.LocalSparseVector
 
 import scala.reflect.ClassTag
 
@@ -67,20 +67,9 @@ class CoordinateTensor[V: ClassTag: Semiring: CanUse](
     * @param v  vector.
     * @return   tensor that dimension of m is 1.
     */
-  def nModeProd(m: Int, v: LocalCoordinateVector[V])(
+  def nModeProd(m: Int, v: DenseVector[V])(
       implicit n: Numeric[V]): CoordinateTensor[V] = {
     val fibers = fibersOnMode(m)
-    val newEntries = fibers.map { p =>
-      val (fi, coord) = (p._1, p._2)
-      val prod = fi >* v
-      TEntry(coord, prod)
-    }
-    CoordinateTensor(shape.updated(m, 1), newEntries)
-  }
-
-  def nModeProd1(m: Int, v: DenseVector[V])(
-      implicit n: Numeric[V]): CoordinateTensor[V] = {
-    val fibers = fibersOnMode1(m)
     val newEntries = fibers.map { p =>
       val (fi, coord) = (p._1, p._2)
       val prod = fi >* v
@@ -95,19 +84,7 @@ class CoordinateTensor[V: ClassTag: Semiring: CanUse](
     * @param m  mode.
     * @return   entries of fibers.
     */
-  def fibersOnMode(m: Int): RDD[(LocalCoordinateVector[V], Coordinate)] = {
-    storage
-      .groupBy(e => e.coordinate.updated(m, 0))
-      .map { p =>
-        val (coordOfFiber, entries) = (p._1, p._2)
-        val fiber = LocalCoordinateVector(
-          shape(m),
-          entries.map(Entry.TEntry2VEntryOnDim(m, _)).toIndexedSeq)
-        (fiber, coordOfFiber)
-      }
-  }
-
-  def fibersOnMode1(m: Int): RDD[(LocalSparseVector[V], Coordinate)] = {
+  def fibersOnMode(m: Int): RDD[(LocalSparseVector[V], Coordinate)] = {
     storage
       .groupBy(e => e.coordinate.updated(m, 0))
       .map { p =>
@@ -138,44 +115,42 @@ class CoordinateTensor[V: ClassTag: Semiring: CanUse](
 object CoordinateTensor {
   private def decoupledKR(
       tensor: CoordinateTensor[Double],
-      factorMatrices: IndexedSeq[CoordinateMatrix[Double]],
-      dim: Int)(implicit sc: SparkContext): CoordinateMatrix[Double] = {
+      facMats: IndexedSeq[IndexedRowMatrix[Double]],
+      dim: Int)(implicit sc: SparkContext): IndexedRowMatrix[Double] = {
     val shape = tensor.shape
-    val rank = factorMatrices.head.cols
-    val initMatrix = CoordinateMatrix.zeros[Double](shape(dim), rank)
-    val krProdMatrixIndices = factorMatrices.indices.filter(_ != dim)
+    val rank = facMats.head.numCols
 
-    (0 until rank).foldLeft(initMatrix) { (accMatrix, r) =>
-      val tmpTensor =
-        krProdMatrixIndices.foldLeft(tensor) { (accTensor, idx) =>
-          accTensor nModeProd (idx, sc
-            .broadcast(factorMatrices(idx).localColAt(r))
-            .value)
-        }
-      accMatrix.addEntry(tmpTensor.storage.map(e =>
+    val initfmat = CoordinateMatrix.zeros[Double](shape(dim), rank)
+    val krProdMatIdx = facMats.indices.filter(_ != dim)
+
+    val fmat = (0 until rank).foldLeft(initfmat) { (accmat, r) =>
+      val tmpten = krProdMatIdx.foldLeft(tensor) { (accten, idx) =>
+        accten nModeProd (idx, sc.broadcast(facMats(idx).localColAt(r)).value)
+      }
+      accmat.addEntry(tmpten.storage.map(e =>
         TEntry(e.coordinate dimKept dim compose r, e.value)))
     }
+
+    fmat.toIndexedRowMatrix
   }
 
-  private def paraOuterPinv(
-      factorMatrices: IndexedSeq[CoordinateMatrix[Double]],
-      dim: Int): DenseMatrix[Double] = {
-    val rank = factorMatrices.head.cols
-    val outerProdMatrixIndices = factorMatrices.indices.filter(_ != dim)
+  private def paraOuterPinv(facMats: IndexedSeq[IndexedRowMatrix[Double]],
+                             dim: Int): DenseMatrix[Double] = {
+    val rank = facMats.head.numCols
+    val outerProdMatIdx = facMats.indices.filter(_ != dim)
 
-    val prod =
-      outerProdMatrixIndices.foldLeft(DenseMatrix.ones[Double](rank, rank)) {
-        (acc, idx) =>
-          // Hadamard product
-          acc :* factorMatrices(idx).tProd
-      }
+    val prod = outerProdMatIdx.foldLeft(DenseMatrix.ones[Double](rank, rank)) {
+      (acc, idx) =>
+        val fm = facMats(idx)
+        acc :* (fm.t * fm)
+    }
 
     pinv(prod)
   }
 
-  private def paraMatrixProd(decopkr: CoordinateMatrix[Double],
-                             m: DenseMatrix[Double])(
-      implicit sc: SparkContext): CoordinateMatrix[Double] = {
+  private def paraMatrixProd(decopkr: IndexedRowMatrix[Double],
+                              m: DenseMatrix[Double])(
+      implicit sc: SparkContext): IndexedRowMatrix[Double] = {
     val broadm = sc.broadcast(m)
     decopkr * broadm.value
   }
@@ -195,97 +170,6 @@ object CoordinateTensor {
              maxIter: Int = 500,
              tol: Double = 1e-6,
              tries: Int = 5)(implicit sc: SparkContext)
-    : (IndexedSeq[CoordinateMatrix[Double]], DenseVector[Double]) = {
-
-    val shape = tensor.shape
-
-    var optimalFactorMatrices: IndexedSeq[CoordinateMatrix[Double]] =
-      shape.map(CoordinateMatrix.zeros[Double](_, rank))
-    var optimalLambda = DenseVector.zeros[Double](rank)
-    var reconstructedLoss: Double = 0.0
-    var optimalReconstructedLoss: Double = Double.PositiveInfinity
-
-    // tries
-    for (_ <- 0 until tries) {
-      var factorMatrices = shape.map(
-        CoordinateMatrix
-          .rand[Double](_, rank, Gaussian(mu = 0.0, sigma = 1.0)))
-      var prevHead =
-        CoordinateMatrix.zeros[Double](factorMatrices.head.rows, rank)
-      var lambda = DenseVector.zeros[Double](rank)
-
-      // iteration in each try
-      var iter = 0
-      while (iter < maxIter) {
-        iter += 1
-
-        for (idx <- shape.indices) {
-          val decopkr = decoupledKR(tensor, factorMatrices, idx)
-          val pinv = paraOuterPinv(factorMatrices, idx)
-          val fm = paraMatrixProd(decopkr, pinv)
-
-          val (m, l) = fm.normalizeByCol
-
-          factorMatrices = factorMatrices.updated(idx, m)
-          lambda = l
-        }
-      }
-
-      // set current best
-      optimalFactorMatrices = factorMatrices
-      optimalLambda = lambda
-    }
-
-    (optimalFactorMatrices, optimalLambda)
-  }
-
-  private def decoupledKR1(
-      tensor: CoordinateTensor[Double],
-      facMats: IndexedSeq[IndexedRowMatrix[Double]],
-      dim: Int)(implicit sc: SparkContext): IndexedRowMatrix[Double] = {
-    val shape = tensor.shape
-    val rank = facMats.head.numCols
-
-    val initfmat = CoordinateMatrix.zeros[Double](shape(dim), rank)
-    val krProdMatIdx = facMats.indices.filter(_ != dim)
-
-    val fmat = (0 until rank).foldLeft(initfmat) { (accmat, r) =>
-      val tmpten = krProdMatIdx.foldLeft(tensor) { (accten, idx) =>
-        accten nModeProd1 (idx, sc.broadcast(facMats(idx).localColAt(r)).value)
-      }
-      accmat.addEntry(tmpten.storage.map(e =>
-        TEntry(e.coordinate dimKept dim compose r, e.value)))
-    }
-
-    fmat.toIndexedRowMatrix
-  }
-
-  private def paraOuterPinv1(facMats: IndexedSeq[IndexedRowMatrix[Double]],
-                             dim: Int): DenseMatrix[Double] = {
-    val rank = facMats.head.numCols
-    val outerProdMatIdx = facMats.indices.filter(_ != dim)
-
-    val prod = outerProdMatIdx.foldLeft(DenseMatrix.ones[Double](rank, rank)) {
-      (acc, idx) =>
-        val fm = facMats(idx)
-        acc :* (fm.t * fm)
-    }
-
-    pinv(prod)
-  }
-
-  private def paraMatrixProd1(decopkr: IndexedRowMatrix[Double],
-                              m: DenseMatrix[Double])(
-      implicit sc: SparkContext): IndexedRowMatrix[Double] = {
-    val broadm = sc.broadcast(m)
-    decopkr * broadm.value
-  }
-
-  def paraCP1(tensor: CoordinateTensor[Double],
-              rank: Int,
-              maxIter: Int = 500,
-              tol: Double = 1e-6,
-              tries: Int = 5)(implicit sc: SparkContext)
     : (IndexedSeq[IndexedRowMatrix[Double]], DenseVector[Double]) = {
 
     val shape = tensor.shape
@@ -310,9 +194,9 @@ object CoordinateTensor {
         iter += 1
 
         for (idx <- shape.indices) {
-          val decopkr = decoupledKR1(tensor, factorMats, idx)
-          val pinv = paraOuterPinv1(factorMats, idx)
-          val fm = paraMatrixProd1(decopkr, pinv)
+          val decopkr = decoupledKR(tensor, factorMats, idx)
+          val pinv = paraOuterPinv(factorMats, idx)
+          val fm = paraMatrixProd(decopkr, pinv)
 
           val (m, l) = fm.normalizeByCol
 
