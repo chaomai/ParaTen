@@ -2,8 +2,8 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/.idea/modules/paratd.iml" filepath="$PROJECT_DIR$/.idea/modules/paratd.iml" />
-      <module fileurl="file://$PROJECT_DIR$/.idea/modules/paratd-build.iml" filepath="$PROJECT_DIR$/.idea/modules/paratd-build.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/paraten.iml" filepath="$PROJECT_DIR$/.idea/modules/paraten.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/paraten-build.iml" filepath="$PROJECT_DIR$/.idea/modules/paraten-build.iml" />
     </modules>
   </component>
 </project>

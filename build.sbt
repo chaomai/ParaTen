@@ -1,4 +1,4 @@
-name := "paratd"
+name := "ParaTen"
 
 version := "1.0"
 

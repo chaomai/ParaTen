@@ -2,7 +2,7 @@
 
 * This project implements the CP-ALS algorithm on Spark.
 * The aim of this project is to utilize the power of RDD to achieve fast iteration while performing decomposition.
-* This Project is also a exploration of Type-Safe tensor operation, which is heavily base on Type-Level programming in Scala.
+* This project is also a exploration of Type-Safe tensor operation, which is heavily base on Type-Level programming in Scala.
 
 ## Build and Run
 
@@ -41,5 +41,5 @@ It will produce package `target/scala-2.11/paraten_2.11-1.0.jar`.
 * [mnick/scikit-tensor](https://github.com/mnick/scikit-tensor)
 
 ## License
-   
-Apache License.
+
+[Apache License](https://github.com/ChaoMai/ParaTen/blob/master/LICENSE).
