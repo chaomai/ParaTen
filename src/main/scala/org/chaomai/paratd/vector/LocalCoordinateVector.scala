@@ -2,6 +2,7 @@ package org.chaomai.paratd.vector
 
 import breeze.linalg.{DenseVector, SparseVector, VectorBuilder}
 import breeze.math.Semiring
+import org.chaomai.paratd.support.CanUse
 import org.chaomai.paratd.tensor.VEntry
 
 import scala.reflect.ClassTag
@@ -10,7 +11,7 @@ import scala.reflect.ClassTag
   * Created by chaomai on 03/05/2017.
   */
 class LocalCoordinateVector[
-    @specialized(Double, Float, Int, Long) V: ClassTag: Semiring](
+    @specialized(Double, Float, Int, Long) V: ClassTag: Semiring: CanUse](
     val size: Int,
     private val storage: IndexedSeq[VEntry[V]])
     extends Vector {
@@ -85,14 +86,14 @@ class LocalCoordinateVector[
 }
 
 object LocalCoordinateVector {
-  def vals[V: ClassTag: Semiring](vs: V*): LocalCoordinateVector[V] =
+  def vals[V: ClassTag: Semiring: CanUse](vs: V*): LocalCoordinateVector[V] =
     LocalCoordinateVector(vs.size,
                           vs.zipWithIndex
                             .map(p => VEntry(p._2, p._1))
                             .filter(e => e.value != 0)
                             .toIndexedSeq)
 
-  def apply[V: ClassTag: Semiring](
+  def apply[V: ClassTag: Semiring: CanUse](
       size: Int,
       vec: IndexedSeq[VEntry[V]]): LocalCoordinateVector[V] =
     new LocalCoordinateVector[V](size, vec)

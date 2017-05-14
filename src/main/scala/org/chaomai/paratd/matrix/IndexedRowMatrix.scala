@@ -1,7 +1,7 @@
 package org.chaomai.paratd.matrix
 
-import breeze.linalg.support.LiteralRow
 import breeze.linalg.{
+  isClose,
   * => BBCOp,
   CSCMatrix => BCSCM,
   DenseMatrix => BDM,
@@ -14,16 +14,17 @@ import breeze.stats.distributions.Rand
 import breeze.storage.Zero
 import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
+import org.chaomai.paratd.support.CanUse
 
 import scala.reflect.ClassTag
 
 /**
   * Created by chaomai on 11/05/2017.
   */
-case class IndexedRow[V](ridx: Long, rvec: BDV[V])
+case class IndexedRow[V: CanUse](ridx: Long, rvec: BDV[V])
 
 class IndexedRowMatrix[
-    @specialized(Double, Float, Int, Long) V: ClassTag: Zero: Semiring](
+    @specialized(Double, Float, Int, Long) V: ClassTag: Zero: Semiring: CanUse](
     private var nrows: Long,
     private var ncols: Int,
     private val storage: RDD[IndexedRow[V]])
@@ -50,7 +51,7 @@ class IndexedRowMatrix[
       .reduce(_ + _)
   }
 
-  def map[U: ClassTag: Zero: Semiring](
+  def map[U: ClassTag: Zero: Semiring: CanUse](
       f: IndexedRow[V] => IndexedRow[U]): IndexedRowMatrix[U] =
     IndexedRowMatrix(numRows, numCols, storage.map(f))
 
@@ -96,24 +97,34 @@ class IndexedRowMatrix[
   }
 
   /***
-    * Get the idx th Column.
+    * Get the ridx th row.
+    *
+    * @param ridx row index.
+    * @return     row vector.
+    */
+  def rowAt(ridx: Long): RDD[BDV[V]] =
+    storage.filter(row => row.ridx == ridx).map(row => row.rvec)
+
+  /***
+    * Get the cidx th column.
     *
     * 1. Operation can be expensive.
     * 2. The size is limited to Int.MaxValue.
     *
-    * @return
+    * @param cidx column index.
+    * @return     local column vector.
     */
-  def localColAt(idx: Int): BDV[V] = {
+  def localColAt(cidx: Int): BDV[V] = {
     require(
       numRows <= Int.MaxValue,
-      s"Required column at $idx, but the rows is bigger than ${Int.MaxValue} ")
-    require(numCols > idx,
-            s"Required column at $idx, but matrix has $numCols columns")
+      s"Required column at $cidx, but the rows is bigger than ${Int.MaxValue} ")
+    require(numCols > cidx,
+            s"Required column at $cidx, but matrix has $numCols columns")
 
     val nrs = numRows.toInt
 
     val builder = new BVB[V](nrs)
-    storage.map(row => (row.ridx.toInt, row.rvec(idx))).collect().foreach {
+    storage.map(row => (row.ridx.toInt, row.rvec(cidx))).collect().foreach {
       p =>
         builder.add(p._1, p._2)
     }
@@ -195,16 +206,30 @@ class IndexedRowMatrix[
       }
       case _ => sys.error("Operation on unsupported type.")
     }
+
+  def ~=(m: IndexedRowMatrix[V], tol: Double = 1e-3)(
+      implicit n: Numeric[V]): Boolean = {
+    if ((numRows != m.numRows) || (numCols != m.numCols)) false
+    else {
+      val rows1 = storage.map(row => (row.ridx, row.rvec))
+      val rows2 = m.storage.map(row => (row.ridx, row.rvec))
+      rows1
+        .join(rows2)
+        .map(x =>
+          isClose(x._2._1.map(n.toDouble), x._2._2.map(n.toDouble), tol))
+        .reduce(_ && _)
+    }
+  }
 }
 
 object IndexedRowMatrix {
-  def zeros[V: ClassTag: Zero: Semiring](numRows: Long, numCols: Int)(
+  def zeros[V: ClassTag: Zero: Semiring: CanUse](numRows: Long, numCols: Int)(
       implicit sc: SparkContext): IndexedRowMatrix[V] =
     IndexedRowMatrix(numRows, numCols, sc.emptyRDD[IndexedRow[V]])
 
-  def rand[V: ClassTag: Zero: Semiring](numRows: Long,
-                                        numCols: Int,
-                                        rand: Rand[V] = Rand.uniform)(
+  def rand[V: ClassTag: Zero: Semiring: CanUse](numRows: Long,
+                                                numCols: Int,
+                                                rand: Rand[V] = Rand.uniform)(
       implicit sc: SparkContext): IndexedRowMatrix[V] = {
     val rows = for { ridx <- 0L until numRows } yield
       IndexedRow(ridx, BDV.rand[V](numCols, rand))
@@ -212,30 +237,30 @@ object IndexedRowMatrix {
     IndexedRowMatrix(numRows, numCols, sc.parallelize(rows))
   }
 
-  def fromSeq[V, R](rows: R*)(implicit rl: LiteralRow[R, V],
-                              man: ClassTag[V],
-                              zero: Zero[V],
-                              semiring: Semiring[V],
-                              n: Numeric[V],
-                              sc: SparkContext): IndexedRowMatrix[V] = {
+  def vals[V: ClassTag: Zero: Semiring: CanUse](rows: Seq[V]*)(
+      implicit sc: SparkContext): IndexedRowMatrix[V] = {
     val nrows = rows.length
-    val ncols = rl.length(rows(0))
+    val ncols = rows.head.length
 
     val r = rows.zipWithIndex.map { p =>
       val row = p._1
       val ridx = p._2
 
       val builder = new BVB[V](ncols)
-      rl.foreach(row, { (cidx, v) =>
-        if (v != n.zero) builder.add(cidx, v)
-      })
+
+      row.zipWithIndex.foreach { x =>
+        val cidx = x._2
+        val v = x._1
+        builder.add(cidx, v)
+      }
+
       IndexedRow(ridx, builder.toDenseVector)
     }
 
     IndexedRowMatrix(nrows, ncols, sc.parallelize(r))
   }
 
-  def apply[V: ClassTag: Zero: Semiring](
+  def apply[V: ClassTag: Zero: Semiring: CanUse](
       numRows: Long,
       numCols: Int,
       rdd: RDD[IndexedRow[V]]): IndexedRowMatrix[V] =

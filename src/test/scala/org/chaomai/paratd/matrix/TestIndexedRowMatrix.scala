@@ -23,7 +23,7 @@ class TestIndexedRowMatrix extends UnitSpec {
 
   it should "build from seq" in {
     implicit val sc = Common.sparkContext
-    val m = IndexedRowMatrix.fromSeq((1, 2), (3, 4), (0, 6))
+    val m = IndexedRowMatrix.vals(Seq(1, 2), Seq(3, 4), Seq(0, 6))
 
     assert(m.toDenseMatrix == DenseMatrix((1, 2), (3, 4), (0, 6)))
     assert(m.numRows == 3)
@@ -35,14 +35,14 @@ class TestIndexedRowMatrix extends UnitSpec {
 
   "A IndexedRowMatrix" should "get column" in {
     implicit val sc = Common.sparkContext
-    val m = IndexedRowMatrix.fromSeq((1, 2), (3, 4), (0, 6))
+    val m = IndexedRowMatrix.vals(Seq(1, 2), Seq(3, 4), Seq(0, 6))
 
     assert(m.localColAt(1) == DenseVector(2, 4, 6))
   }
 
   it should "perform transformation" in {
     implicit val sc = Common.sparkContext
-    val m = IndexedRowMatrix.fromSeq((1, 2), (3, 4), (0, 6))
+    val m = IndexedRowMatrix.vals(Seq(1, 2), Seq(3, 4), Seq(0, 6))
 
     val mt = m.t
     assert(mt.numRows == 2)
@@ -55,7 +55,7 @@ class TestIndexedRowMatrix extends UnitSpec {
 
   it should "perform matrix product with DenseMatrix" in {
     implicit val sc = Common.sparkContext
-    val m = IndexedRowMatrix.fromSeq((1, 2), (3, 4), (5, 6))
+    val m = IndexedRowMatrix.vals(Seq(1, 2), Seq(3, 4), Seq(5, 6))
     val dm = DenseMatrix((1, 2), (3, 4))
 
     val p = m * dm
@@ -67,7 +67,7 @@ class TestIndexedRowMatrix extends UnitSpec {
 
   it should "perform matrix product with transformed IndexedRowMatrix" in {
     implicit val sc = Common.sparkContext
-    val m = IndexedRowMatrix.fromSeq((1, 2), (3, 4), (5, 6))
+    val m = IndexedRowMatrix.vals(Seq(1, 2), Seq(3, 4), Seq(5, 6))
 
     val p = m * m.t
 
@@ -79,7 +79,7 @@ class TestIndexedRowMatrix extends UnitSpec {
 
   it should "perform transformed matrix product with IndexedRowMatrix" in {
     implicit val sc = Common.sparkContext
-    val m = IndexedRowMatrix.fromSeq((1, 2), (3, 4), (5, 6))
+    val m = IndexedRowMatrix.vals(Seq(1, 2), Seq(3, 4), Seq(5, 6))
 
     val p = m.t * m
 
@@ -90,7 +90,8 @@ class TestIndexedRowMatrix extends UnitSpec {
 
   it should "perform normalization" in {
     implicit val sc = Common.sparkContext
-    val m = IndexedRowMatrix.fromSeq((1.0, 2.0), (3.0, 4.0), (5.0, 6.0))
+    val m =
+      IndexedRowMatrix.vals(Seq(1.0, 2.0), Seq(3.0, 4.0), Seq(5.0, 6.0))
 
     val (nm, n) = m.normalizeByCol
     println(nm.toDenseMatrix)
@@ -108,5 +109,18 @@ class TestIndexedRowMatrix extends UnitSpec {
 
     println(nm1)
     println(n1)
+  }
+
+  it should "check equality" in {
+    implicit val sc = Common.sparkContext
+    val m1 =
+      IndexedRowMatrix.vals(Seq(0.1, 0.2), Seq(0.3, 0.4), Seq(0.5, 0.6))
+    val m2 =
+      IndexedRowMatrix.vals(Seq(0.1, 0.2), Seq(0.3, 0.3997), Seq(0.5, 0.6))
+    val m3 =
+      IndexedRowMatrix.vals(Seq(0.1, 0.2), Seq(0.3, 0.4), Seq(0.3, 0.6))
+
+    assert(m1 ~= m2)
+    assert(!(m1 ~= m3))
   }
 }

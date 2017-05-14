@@ -1,23 +1,15 @@
-package org.chaomai.paratd.tensor
+package org.chaomai.paratd.matrix
 
 import breeze.linalg.operators.OpMulInner
-import breeze.linalg.support.LiteralRow
-import breeze.linalg.{
-  BroadcastedColumns,
-  CSCMatrix,
-  DenseMatrix,
-  DenseVector,
-  Transpose,
-  VectorBuilder,
-  * => broadcastingOp
-}
+import breeze.linalg.{BroadcastedColumns, CSCMatrix, DenseMatrix, DenseVector, Transpose, VectorBuilder, * => broadcastingOp}
 import breeze.math.Semiring
 import breeze.numerics.sqrt
 import breeze.stats.distributions.Rand
 import breeze.storage.Zero
 import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
-import org.chaomai.paratd.matrix.{IndexedRow, IndexedRowMatrix}
+import org.chaomai.paratd.tensor.{Coordinate, Entry, TEntry}
+import org.chaomai.paratd.support.{CanUse, NotNothing}
 import org.chaomai.paratd.vector.{CoordinateVector, LocalCoordinateVector}
 
 import scala.reflect.ClassTag
@@ -26,7 +18,7 @@ import scala.reflect.ClassTag
   * Created by chaomai on 02/05/2017.
   */
 class CoordinateMatrix[
-    @specialized(Double, Float, Int, Long) V: ClassTag: Zero: Semiring](
+    @specialized(Double, Float, Int, Long) V: ClassTag: Zero: Semiring: CanUse](
     val rows: Int,
     val cols: Int,
     private val storage: RDD[TEntry[V]])
@@ -297,7 +289,7 @@ class CoordinateMatrix[
     * toString.
     * Operation can be expensive.
     *
-    * @return formatted tensor.
+    * @return formatted matrix.
     */
   override def toString: String = {
     def arrayOfTEntryToString(arr: Array[TEntry[V]]): String = {
@@ -322,16 +314,16 @@ class CoordinateMatrix[
 
 object CoordinateMatrix {
 
-  def zeros[@specialized(Double, Float, Int, Long) V: NotNothing: ClassTag: Zero: Semiring](
+  def zeros[V: NotNothing: ClassTag: Zero: Semiring: CanUse](
       rows: Int,
       cols: Int)(implicit sc: SparkContext): CoordinateMatrix[V] = {
     CoordinateMatrix(rows, cols, sc.emptyRDD[TEntry[V]])
   }
 
-  def rand[@specialized(Double) V: ClassTag: Zero: Semiring](rows: Int,
-                                                             cols: Int,
-                                                             rand: Rand[V] =
-                                                               Rand.uniform)(
+  def rand[@specialized(Double) V: ClassTag: Zero: Semiring: CanUse](
+      rows: Int,
+      cols: Int,
+      rand: Rand[V] = Rand.uniform)(
       implicit sc: SparkContext): CoordinateMatrix[V] = {
     val m = DenseMatrix.rand[V](rows, cols, rand)
 
@@ -343,28 +335,27 @@ object CoordinateMatrix {
     CoordinateMatrix(rows, cols, sc.parallelize(entries))
   }
 
-  def fromSeq[V, R](rows: R*)(implicit rl: LiteralRow[R, V],
-                              man: ClassTag[V],
-                              zero: Zero[V],
-                              semiring: Semiring[V],
-                              sc: SparkContext): CoordinateMatrix[V] = {
+  def vals[V: ClassTag: Zero: Semiring: CanUse](rows: Seq[V]*)(
+      implicit sc: SparkContext): CoordinateMatrix[V] = {
     val rs = rows.length
-    val cs = rl.length(rows(0))
+    val cs = rows.head.length
 
-    var entries = IndexedSeq[TEntry[V]]()
+    val entries = rows.zipWithIndex.flatMap { p =>
+      val row = p._1.zipWithIndex
+      val ridx = p._2
 
-    rows.zipWithIndex.foreach { p =>
-      val row = p._1
-      val i = p._2
-      rl.foreach(row, { (j, v) =>
-        if (v != 0) entries = entries :+ TEntry(Coordinate(i, j), v)
-      })
+      row.map { x =>
+        val v = x._1
+        val cidx = x._2
+
+        TEntry(Coordinate(ridx, cidx), v)
+      }
     }
 
     CoordinateMatrix(rs, cs, sc.parallelize(entries))
   }
 
-  def apply[V: ClassTag: Zero: Semiring](
+  def apply[V: ClassTag: Zero: Semiring: CanUse](
       rows: Int,
       cols: Int,
       rdd: RDD[TEntry[V]]): CoordinateMatrix[V] =

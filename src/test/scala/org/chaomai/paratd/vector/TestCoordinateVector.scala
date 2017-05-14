@@ -1,6 +1,5 @@
-package org.chaomai.paratd.tensor
+package org.chaomai.paratd.vector
 
-import org.chaomai.paratd.vector.CoordinateVector
 import org.chaomai.paratd.{Common, UnitSpec}
 
 /**

@@ -5,7 +5,7 @@ import breeze.stats.distributions.Rand
 import breeze.storage.Zero
 import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
-
+import org.chaomai.paratd.support.CanUse
 import org.chaomai.paratd.tensor.VEntry
 
 import scala.reflect.ClassTag
@@ -13,7 +13,8 @@ import scala.reflect.ClassTag
 /**
   * Created by chaomai on 02/05/2017.
   */
-class CoordinateVector[@specialized(Double, Float, Int, Long) V: ClassTag](
+class CoordinateVector[
+    @specialized(Double, Float, Int, Long) V: ClassTag: CanUse](
     val size: Int,
     private val storage: RDD[VEntry[V]])
     extends Vector {
@@ -46,9 +47,9 @@ class CoordinateVector[@specialized(Double, Float, Int, Long) V: ClassTag](
 }
 
 object CoordinateVector {
-  def rand[@specialized(Double) V: ClassTag: Zero](
-      size: Int,
-      rand: Rand[V] = Rand.uniform)(
+  def rand[@specialized(Double) V: ClassTag: Zero: CanUse](size: Int,
+                                                           rand: Rand[V] =
+                                                             Rand.uniform)(
       implicit sc: SparkContext): CoordinateVector[V] = {
     val v = DenseVector.rand[V](size, rand)
 
@@ -59,7 +60,7 @@ object CoordinateVector {
     CoordinateVector(size, sc.parallelize(entries))
   }
 
-  def vals[@specialized(Double, Float, Int, Long) V: ClassTag](vs: V*)(
+  def vals[@specialized(Double, Float, Int, Long) V: ClassTag: CanUse](vs: V*)(
       implicit sc: SparkContext): CoordinateVector[V] = {
     CoordinateVector(vs.length,
                      sc.parallelize(
@@ -68,12 +69,13 @@ object CoordinateVector {
                          .filter(e => e.value != 0)))
   }
 
-  def fromRDD[@specialized(Double, Float, Int, Long) V: ClassTag](
+  def fromRDD[@specialized(Double, Float, Int, Long) V: ClassTag: CanUse](
       size: Int,
       rdd: RDD[VEntry[V]]): CoordinateVector[V] = {
     CoordinateVector(size, rdd)
   }
 
-  def apply[V: ClassTag](size: Int, rdd: RDD[VEntry[V]]): CoordinateVector[V] =
+  def apply[V: ClassTag: CanUse](size: Int,
+                                 rdd: RDD[VEntry[V]]): CoordinateVector[V] =
     new CoordinateVector[V](size, rdd)
 }

@@ -5,8 +5,8 @@ import breeze.math.Semiring
 import breeze.stats.distributions.Gaussian
 import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
-
-import org.chaomai.paratd.matrix.IndexedRowMatrix
+import org.chaomai.paratd.matrix.{CoordinateMatrix, IndexedRowMatrix}
+import org.chaomai.paratd.support.CanUse
 import org.chaomai.paratd.vector.{LocalCoordinateVector, LocalSparseVector}
 
 import scala.reflect.ClassTag
@@ -14,7 +14,7 @@ import scala.reflect.ClassTag
 /**
   * Created by chaomai on 02/05/2017.
   */
-class CoordinateTensor[V: ClassTag: Semiring: Numeric](
+class CoordinateTensor[V: ClassTag: Semiring: CanUse](
     sv: IndexedSeq[Int],
     private val storage: RDD[TEntry[V]])
     extends Serializable {
@@ -31,14 +31,34 @@ class CoordinateTensor[V: ClassTag: Semiring: Numeric](
     else Some(r.take(1).head)
   }
 
-  def map[U: ClassTag: Semiring](f: TEntry[V] => TEntry[U])(
-      implicit n: Numeric[U]): CoordinateTensor[U] =
+  def map[U: ClassTag: Semiring: CanUse](
+      f: TEntry[V] => TEntry[U]): CoordinateTensor[U] =
     CoordinateTensor(shape, storage.map(f))
 
   def mapStorage[U: ClassTag](f: TEntry[V] => U): RDD[U] =
     storage.map(f)
 
   def collect: Array[TEntry[V]] = storage.collect()
+
+  def ~=(t: CoordinateTensor[V], tol: Double = 1e-3): (Double, Boolean) = {
+    val t1 = storage.map(e => (e.coordinate, e.value))
+    val t2 = t.storage.map(e => (e.coordinate, e.value))
+
+//    t1.fullOuterJoin(t2).map { x =>
+//      val coord = x._1
+//      val e1 = x._2._1
+//      val e2 = x._2._2
+//
+//      (e1, e2) match {
+//        case (None, None) => true
+//        case (None, Some(v))=>
+//      }
+//    }
+
+    ???
+  }
+
+  def <*(v: DenseVector[V]): CoordinateTensor[V] = ???
 
   /***
     * n mode product with vector
@@ -47,7 +67,8 @@ class CoordinateTensor[V: ClassTag: Semiring: Numeric](
     * @param v  vector.
     * @return   tensor that dimension of m is 1.
     */
-  def nModeProd(m: Int, v: LocalCoordinateVector[V]): CoordinateTensor[V] = {
+  def nModeProd(m: Int, v: LocalCoordinateVector[V])(
+      implicit n: Numeric[V]): CoordinateTensor[V] = {
     val fibers = fibersOnMode(m)
     val newEntries = fibers.map { p =>
       val (fi, coord) = (p._1, p._2)
@@ -57,7 +78,8 @@ class CoordinateTensor[V: ClassTag: Semiring: Numeric](
     CoordinateTensor(shape.updated(m, 1), newEntries)
   }
 
-  def nModeProd1(m: Int, v: DenseVector[V]): CoordinateTensor[V] = {
+  def nModeProd1(m: Int, v: DenseVector[V])(
+      implicit n: Numeric[V]): CoordinateTensor[V] = {
     val fibers = fibersOnMode1(m)
     val newEntries = fibers.map { p =>
       val (fi, coord) = (p._1, p._2)
@@ -268,11 +290,11 @@ object CoordinateTensor {
 
     val shape = tensor.shape
 
-    var optimalFactorMats: IndexedSeq[IndexedRowMatrix[Double]] =
+    var optimalFacMats: IndexedSeq[IndexedRowMatrix[Double]] =
       shape.map(IndexedRowMatrix.zeros[Double](_, rank))
     var optimalLambda = DenseVector.zeros[Double](rank)
-    var reconstructedLoss: Double = 0.0
-    var optimalReconstructedLoss: Double = Double.PositiveInfinity
+    var reconsLoss: Double = 0.0
+    var optimalReconsLoss: Double = Double.PositiveInfinity
 
     for (_ <- 0 until tries) {
       var factorMats = shape.map(
@@ -283,7 +305,10 @@ object CoordinateTensor {
 
       var lambda = DenseVector.zeros[Double](rank)
 
-      for (iter <- 0 until maxIter) {
+      var iter = 0
+      while ((iter < maxIter) || (prevHead ~= factorMats.head)) {
+        iter += 1
+
         for (idx <- shape.indices) {
           val decopkr = decoupledKR1(tensor, factorMats, idx)
           val pinv = paraOuterPinv1(factorMats, idx)
@@ -295,19 +320,33 @@ object CoordinateTensor {
           lambda = l
         }
       }
+
+      // set current best
+      val p = tensor ~= fromFacMats(shape, rank, factorMats, lambda)
+      reconsLoss = p._1
+      val isClose = p._2
+
+      if (reconsLoss < optimalReconsLoss) {
+        optimalFacMats = factorMats
+        optimalLambda = lambda
+        optimalReconsLoss = reconsLoss
+      }
     }
 
-    ???
+    (optimalFacMats, optimalLambda)
   }
 
-  def apply[V: ClassTag: Semiring: Numeric](
+  def zero[V: ClassTag: Semiring: CanUse](sv: IndexedSeq[Int])(
+      implicit sc: SparkContext): CoordinateTensor[V] = {
+    CoordinateTensor(sv, sc.emptyRDD[TEntry[V]])
+  }
+
+  def apply[V: ClassTag: Semiring: CanUse](
       sv: IndexedSeq[Int],
       rdd: RDD[TEntry[V]]): CoordinateTensor[V] = {
     new CoordinateTensor[V](sv, rdd)
   }
-}
 
-object TensorFactory {
   def fromFile(path: String, sv: IndexedSeq[Int])(
       implicit sc: SparkContext): CoordinateTensor[Double] = {
     val dim = sv.length
@@ -320,5 +359,23 @@ object TensorFactory {
       }
 
     CoordinateTensor(sv, entries)
+  }
+
+  def fromFacMats(shape: IndexedSeq[Int],
+                  rank: Int,
+                  mats: IndexedSeq[IndexedRowMatrix[Double]],
+                  lambda: DenseVector[Double])(
+      implicit sc: SparkContext): CoordinateTensor[Double] = {
+    val tensor = CoordinateTensor.zero[Double](shape)
+
+    for (r <- 0 until rank) {
+
+      var accTen = CoordinateTensor.zero[Double](shape)
+      for (m <- mats) {
+        accTen <* m.localColAt(r)
+      }
+    }
+
+    ???
   }
 }

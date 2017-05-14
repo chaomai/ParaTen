@@ -1,5 +1,7 @@
 package org.chaomai.paratd.tensor
 
+import org.chaomai.paratd.support.NotNothing
+
 /**
   * Created by chaomai on 16/04/2017.
   */

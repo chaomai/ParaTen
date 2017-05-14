@@ -1,4 +1,4 @@
-package org.chaomai.paratd.tensor
+package org.chaomai.paratd.support
 
 import scala.annotation.implicitNotFound
 

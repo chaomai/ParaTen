@@ -1,7 +1,7 @@
 package org.chaomai.paratd.matrix
 
-import breeze.linalg.{*, DenseMatrix, norm}
-import org.chaomai.paratd.tensor.{Coordinate, CoordinateMatrix}
+import breeze.linalg.{*, norm, DenseMatrix}
+import org.chaomai.paratd.tensor.Coordinate
 import org.chaomai.paratd.{Common, UnitSpec}
 
 /**
@@ -26,7 +26,7 @@ class TestCoordinateMatrix extends UnitSpec {
 
   it should "build from seq" in {
     implicit val sc = Common.sparkContext
-    val m = CoordinateMatrix.fromSeq((1, 2), (3, 4), (0, 6))
+    val m = CoordinateMatrix.vals(Seq(1, 2), Seq(3, 4), Seq(0, 6))
     println(m)
 
     val e = m.find(_.coordinate == Coordinate(2, 1))
@@ -66,7 +66,7 @@ class TestCoordinateMatrix extends UnitSpec {
 
   it should "perform tProd" in {
     implicit val sc = Common.sparkContext
-    val m = CoordinateMatrix.fromSeq((1, 2), (3, 4), (5, 6))
+    val m = CoordinateMatrix.vals(Seq(1, 2), Seq(3, 4), Seq(5, 6))
 
     val p = m.tProd
     println(p)
@@ -75,7 +75,7 @@ class TestCoordinateMatrix extends UnitSpec {
 
   it should "perform matrix product with DenseMatrix" in {
     implicit val sc = Common.sparkContext
-    val m = CoordinateMatrix.fromSeq((1, 2), (3, 4), (5, 6))
+    val m = CoordinateMatrix.vals(Seq(1, 2), Seq(3, 4), Seq(5, 6))
     val dm = DenseMatrix((1, 2), (3, 4))
 
     val p = m * dm
@@ -86,7 +86,7 @@ class TestCoordinateMatrix extends UnitSpec {
 
   it should "perform normalization" in {
     implicit val sc = Common.sparkContext
-    val m = CoordinateMatrix.fromSeq((1.0, 2.0), (3.0, 4.0), (5.0, 6.0))
+    val m = CoordinateMatrix.vals(Seq(1.0, 2.0), Seq(3.0, 4.0), Seq(5.0, 6.0))
 
     val (nm, n) = m.normalizeByCol
     println(nm.toDenseMatrix)

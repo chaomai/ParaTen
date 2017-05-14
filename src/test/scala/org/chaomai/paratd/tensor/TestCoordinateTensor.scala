@@ -110,24 +110,24 @@ class TestCoordinateTensor extends UnitSpec {
     assert(eOption.get.value == 107)
   }
 
-//  it should "perform cp decomposition on a dense tensor" in {
-//    implicit val sc = Common.sparkContext
-//
-//    val t = Common.dim4DenseTensor
-//    val cpRet = CoordinateTensor.paraCP(t, 3, maxIter = 5, tries = 1)
-//
-//    val fms = cpRet._1
-//    val l = cpRet._2
-//
-//    fms.foreach(e => println(e.toDenseMatrix))
-//    println(l)
-//  }
-//
+  it should "perform cp decomposition on a dense tensor" in {
+    implicit val sc = Common.sparkContext
+
+    val t = Common.dim4DenseTensor
+    val cpRet = CoordinateTensor.paraCP1(t, 3, maxIter = 5, tries = 1)
+
+    val fms = cpRet._1
+    val l = cpRet._2
+
+    fms.foreach(e => println(e.toDenseMatrix))
+    println(l)
+  }
+
   it should "perform cp decomposition on a sparse tensor" in {
     implicit val sc = Common.sparkContext
 
     val t = Common.dim4SparseTensor
-    val cpRet = CoordinateTensor.paraCP(t, 3, maxIter = 5, tries = 1)
+    val cpRet = CoordinateTensor.paraCP1(t, 3, maxIter = 5, tries = 1)
 
     val fms = cpRet._1
     val l = cpRet._2

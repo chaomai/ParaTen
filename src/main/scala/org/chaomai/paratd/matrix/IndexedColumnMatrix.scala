@@ -1,6 +1,5 @@
 package org.chaomai.paratd.matrix
 
-import breeze.linalg.support.LiteralRow
 import breeze.linalg.{
   CSCMatrix => BCSCM,
   DenseMatrix => BDM,
@@ -12,16 +11,17 @@ import breeze.stats.distributions.Rand
 import breeze.storage.Zero
 import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
+import org.chaomai.paratd.support.CanUse
 
 import scala.reflect.ClassTag
 
 /**
   * Created by chaomai on 11/05/2017.
   */
-case class IndexedColumn[V](cidx: Long, cvec: BDV[V])
+case class IndexedColumn[V: CanUse](cidx: Long, cvec: BDV[V])
 
 class IndexedColumnMatrix[
-    @specialized(Double, Float, Int, Long) V: ClassTag: Zero: Semiring](
+    @specialized(Double, Float, Int, Long) V: ClassTag: Zero: Semiring: CanUse](
     private var nrows: Int,
     private var ncols: Long,
     private val storage: RDD[IndexedColumn[V]])
@@ -88,18 +88,18 @@ class IndexedColumnMatrix[
     cols
       .join(rows)
       .map(x => x._2._1 * x._2._2.t)
-      .fold(BDM.zeros[V](numRows, m.numCols))(_ + _)
+      .reduce(_ + _)
   }
 }
 
 object IndexedColumnMatrix {
-  def zeros[V: ClassTag: Zero: Semiring](numRows: Int, numCols: Long)(
+  def zeros[V: ClassTag: Zero: Semiring: CanUse](numRows: Int, numCols: Long)(
       implicit sc: SparkContext): IndexedColumnMatrix[V] =
     IndexedColumnMatrix(numRows, numCols, sc.emptyRDD[IndexedColumn[V]])
 
-  def rand[V: ClassTag: Zero: Semiring](numRows: Int,
-                                        numCols: Long,
-                                        rand: Rand[V] = Rand.uniform)(
+  def rand[V: ClassTag: Zero: Semiring: CanUse](numRows: Int,
+                                                numCols: Long,
+                                                rand: Rand[V] = Rand.uniform)(
       implicit sc: SparkContext): IndexedColumnMatrix[V] = {
     val cols = for { cidx <- 0L until numRows } yield
       IndexedColumn(cidx, BDV.rand[V](numRows, rand))
@@ -107,13 +107,9 @@ object IndexedColumnMatrix {
     IndexedColumnMatrix(numRows, numCols, sc.parallelize(cols))
   }
 
-  def fromSeq[V, R](cols: R*)(implicit cl: LiteralRow[R, V],
-                              man: ClassTag[V],
-                              zero: Zero[V],
-                              semiring: Semiring[V],
-                              n: Numeric[V],
-                              sc: SparkContext): IndexedColumnMatrix[V] = {
-    val nrows = cl.length(cols(0))
+  def vals[V: ClassTag: Zero: Semiring: CanUse](cols: Seq[V]*)(
+      implicit sc: SparkContext): IndexedColumnMatrix[V] = {
+    val nrows = cols.head.length
     val ncols = cols.length
 
     val c = cols.zipWithIndex.map { p =>
@@ -121,16 +117,19 @@ object IndexedColumnMatrix {
       val cidx = p._2
 
       val builder = new BVB[V](nrows)
-      cl.foreach(col, { (ridx, v) =>
-        if (v != n.zero) builder.add(ridx, v)
-      })
+      col.zipWithIndex.foreach { x =>
+        val ridx = x._2
+        val v = x._1
+        builder.add(ridx, v)
+      }
+
       IndexedColumn(cidx, builder.toDenseVector)
     }
 
     IndexedColumnMatrix(nrows, ncols, sc.parallelize(c))
   }
 
-  def apply[V: ClassTag: Zero: Semiring](
+  def apply[V: ClassTag: Zero: Semiring: CanUse](
       numRows: Int,
       numCols: Long,
       rdd: RDD[IndexedColumn[V]]): IndexedColumnMatrix[V] =

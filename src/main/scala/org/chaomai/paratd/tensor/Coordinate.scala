@@ -1,5 +1,7 @@
 package org.chaomai.paratd.tensor
 
+import org.chaomai.paratd.support.CanUse
+
 /**
   * Created by chaomai on 02/05/2017.
   */
@@ -43,7 +45,7 @@ object Coordinate {
 sealed trait Entry[V] extends Serializable
 
 object Entry {
-  def TEntry2VEntryOnDim[V](dim: Int, e: TEntry[V]): VEntry[V] = {
+  def TEntry2VEntryOnDim[V: CanUse](dim: Int, e: TEntry[V]): VEntry[V] = {
     require(
       e.coordinate.length > dim,
       s"Requested transformation from TEntry to VEntry on dim $dim, "
@@ -53,7 +55,8 @@ object Entry {
   }
 }
 
-case class TEntry[V](coordinate: Coordinate, value: V) extends Entry[V] {
+case class TEntry[V: CanUse](coordinate: Coordinate, value: V)
+    extends Entry[V] {
   def dimAt(idx: Int): Int = coordinate(idx)
 
   def dimWithout(idx: Int): Coordinate = coordinate.dimWithout(idx)
@@ -63,6 +66,6 @@ case class TEntry[V](coordinate: Coordinate, value: V) extends Entry[V] {
   }
 }
 
-case class VEntry[V](coordinate: Int, value: V) extends Entry[V] {
+case class VEntry[V: CanUse](coordinate: Int, value: V) extends Entry[V] {
   override def toString: String = "%s @ %d".format(value.toString, coordinate)
 }

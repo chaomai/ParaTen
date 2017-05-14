@@ -23,7 +23,7 @@ class TestIndexedColumnMatrix extends UnitSpec {
 
   it should "build from seq" in {
     implicit val sc = Common.sparkContext
-    val m = IndexedColumnMatrix.fromSeq((1, 2), (3, 4), (0, 6))
+    val m = IndexedColumnMatrix.vals(Seq(1, 2), Seq(3, 4), Seq(0, 6))
 
     assert(m.toDenseMatrix == DenseMatrix((1, 3, 0), (2, 4, 6)))
     assert(m.numRows == 2)
@@ -35,7 +35,7 @@ class TestIndexedColumnMatrix extends UnitSpec {
 
   "A IndexedColumnMatrix" should "perform transformation" in {
     implicit val sc = Common.sparkContext
-    val m = IndexedColumnMatrix.fromSeq((1, 2), (3, 4), (0, 6))
+    val m = IndexedColumnMatrix.vals(Seq(1, 2), Seq(3, 4), Seq(0, 6))
 
     val mt = m.t
     assert(mt.numRows == 3)
@@ -46,9 +46,9 @@ class TestIndexedColumnMatrix extends UnitSpec {
     println(mt.toCSCMatrix)
   }
 
-  it should "perform tProd" in {
+  it should "perform matrix with transformed IndexedColumnMatrix" in {
     implicit val sc = Common.sparkContext
-    val m = IndexedColumnMatrix.fromSeq((1, 2), (3, 4), (5, 6))
+    val m = IndexedColumnMatrix.vals(Seq(1, 2), Seq(3, 4), Seq(5, 6))
 
     val p = m * m.t
 

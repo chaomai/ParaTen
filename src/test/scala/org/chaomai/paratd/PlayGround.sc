@@ -1,6 +1,7 @@
 import breeze.linalg.{DenseMatrix, DenseVector, SparseVector, VectorBuilder, det, norm}
 import breeze.math.{Field, Ring, Semiring}
 import breeze.storage.Zero
+import org.chaomai.paratd.vector.LocalSparseVector
 
 import scala.reflect.ClassTag
 
@@ -120,3 +121,22 @@ sv.mapPairs((i, v) => (i, v)).foldLeft("")((acc, p) => acc + ", " + p)
 
 DenseVector(2, 4, 5) * DenseVector(1, 2).t
 DenseVector(2, 4, 5).t * DenseVector(1, 2, 3)
+
+//-------------------------------
+
+trait CanUse[T]
+
+object CanUse {
+
+  implicit object canUseInt extends CanUse[Int]
+
+  implicit object canUseString extends CanUse[String]
+
+  // etc.
+}
+
+def myFunction[T: CanUse](x: T) = {
+  ???
+}
+
+//myFunction(1.2)
