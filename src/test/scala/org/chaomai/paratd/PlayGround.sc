@@ -1,4 +1,4 @@
-import breeze.linalg.{DenseMatrix, DenseVector, VectorBuilder, norm}
+import breeze.linalg.{DenseMatrix, DenseVector, VectorBuilder, isClose, norm}
 
 
 class A(val value: Int) {
@@ -135,3 +135,7 @@ def myFunction[T: CanUse](x: T) = {
 }
 
 //myFunction(1.2)
+
+//-------------------------------
+
+isClose(DenseVector[Double](1, 2, 3, 4), DenseVector[Double](1, 2, 3, 5))

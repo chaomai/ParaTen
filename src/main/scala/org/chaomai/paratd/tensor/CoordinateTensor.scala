@@ -2,6 +2,7 @@ package org.chaomai.paratd.tensor
 
 import breeze.linalg.{
   isClose,
+  norm,
   pinv,
   DenseMatrix,
   DenseVector,
@@ -13,8 +14,8 @@ import breeze.stats.distributions.Gaussian
 import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
 import org.chaomai.paratd.matrix.{CoordinateMatrix, IndexedRowMatrix}
-import org.chaomai.paratd.support.CanUse
-import org.chaomai.paratd.vector.LocalVector
+import org.chaomai.paratd.support.{CanApproximatelyEqual, CanUse}
+import org.chaomai.paratd.vector.LocalVectorOps
 
 import scala.reflect.ClassTag
 
@@ -53,13 +54,15 @@ class CoordinateTensor[V: ClassTag: Semiring: CanUse](
   /***
     * Elementwise approximately equality.
     *
-    * @param t    another tensor.
-    * @param tol  tolerance.
-    * @param n    implicit Numeric.
-    * @return     equality.
+    * @param t          another tensor.
+    * @param tol        tolerance.
+    * @param n          implicit Numeric.
+    * @param approxEq   implicit CanApproximatelyEqual.
+    * @return           equality.
     */
-  def :~==(t: CoordinateTensor[V], tol: Double = 1e-6)(
-      implicit n: Numeric[V]): Boolean = {
+  def :~==(t: CoordinateTensor[V], tol: Double = 1e-3)(
+      implicit n: Numeric[V],
+      approxEq: CanApproximatelyEqual[V]): Boolean = {
     if (shape != t.shape) false
     else {
       val t1 = storage.map(e => (e.coordinate, e.value))
@@ -72,8 +75,8 @@ class CoordinateTensor[V: ClassTag: Semiring: CanUse](
 
           (e1, e2) match {
             case (None, None) => sys.error("should not happen")
-            case (Some(_), None) => false
-            case (None, Some(_)) => false
+            case (Some(_), None) => isClose(n.toDouble(e1.get), 0d, tol)
+            case (None, Some(_)) => isClose(0d, n.toDouble(e2.get), tol)
             case (Some(_), Some(_)) =>
               isClose(n.toDouble(e1.get), n.toDouble(e2.get), tol)
           }
@@ -174,7 +177,7 @@ class CoordinateTensor[V: ClassTag: Semiring: CanUse](
     val fibers = fibersOnMode(m)
     val newEntries = fibers.map { p =>
       val (fi, coord) = (p._1, p._2)
-      val prod = LocalVector.>*(fi, v)
+      val prod = LocalVectorOps.>*(fi, v)
       TEntry(coord, prod)
     }
     CoordinateTensor(shape.updated(m, 1), newEntries)
@@ -204,12 +207,12 @@ class CoordinateTensor[V: ClassTag: Semiring: CanUse](
     storage.filter(_.coordinate == IndexedSeq(dim: _*)).take(1)(0).value
 
   override def toString: String =
-    storage.collect().foldLeft("") { (acc, e) =>
+    storage.collect().foldLeft("[") { (acc, e) =>
       (acc, e) match {
-        case ("", entry) => acc + entry.toString
+        case ("[", entry) => acc + entry.toString
         case _ => acc + ", " + e.toString
       }
-    }
+    } + "]"
 }
 
 object CoordinateTensor {
@@ -261,6 +264,19 @@ object CoordinateTensor {
     prod
   }
 
+  private def loss(t: CoordinateTensor[Double]): Double = {
+    val fibers = t.fibersOnMode(0)
+    val norms = fibers
+      .map { p =>
+        val (fi, _) = (p._1, p._2)
+        norm(fi)
+      }
+      .collect()
+      .toSeq
+
+    norm(DenseVector(norms: _*))
+  }
+
   /***
     * CP Decomposition via ALS on Spark.
     *
@@ -274,8 +290,8 @@ object CoordinateTensor {
   def paraCP(tensor: CoordinateTensor[Double],
              rank: Int,
              maxIter: Int = 500,
-             tol: Double = 1e-6,
-             tries: Int = 5)(implicit sc: SparkContext)
+             tol: Double = 1e-3,
+             tries: Int = 3)(implicit sc: SparkContext)
     : (IndexedSeq[IndexedRowMatrix[Double]], DenseVector[Double]) = {
 
     val shape = tensor.shape
@@ -296,7 +312,7 @@ object CoordinateTensor {
       var lambda = DenseVector.zeros[Double](rank)
 
       var iter = 0
-      while ((iter < maxIter) || (prevHead :~== facMats.head)) {
+      while ((iter < maxIter) && !prevHead.:~==(facMats.head, tol)) {
         iter += 1
 
         for (idx <- shape.indices) {
@@ -309,17 +325,26 @@ object CoordinateTensor {
           facMats = facMats.updated(idx, m)
           lambda = l
         }
+
+        println("iter: %d".format(iter))
       }
 
-      // set current best
-//      reconsLoss = ???
-//      tensor :- CoordinateTensor.fromFacMats(shape, rank, facMats, lambda)
+      // get loss
+      val reconsTen =
+        CoordinateTensor.fromFacMats(shape, rank, facMats, lambda)
+      reconsLoss = loss(tensor :- reconsTen)
 
-//      if (reconsLoss < optimalReconsLoss) {
+      println("iter: %d, loss: %f".format(iter, reconsLoss))
+      facMats.foreach(e => println(e.toDenseMatrix))
+      println(lambda)
+      println(reconsTen)
+
+      // set current best
+      if (reconsLoss < optimalReconsLoss) {
         optimalFacMats = facMats
         optimalLambda = lambda
         optimalReconsLoss = reconsLoss
-//      }
+      }
     }
 
     (optimalFacMats, optimalLambda)

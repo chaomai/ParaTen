@@ -14,7 +14,7 @@ import breeze.stats.distributions.Rand
 import breeze.storage.Zero
 import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
-import org.chaomai.paratd.support.CanUse
+import org.chaomai.paratd.support.{CanApproximatelyEqual, CanUse}
 
 import scala.reflect.ClassTag
 
@@ -193,6 +193,9 @@ class IndexedRowMatrix[
     IndexedRowMatrix(numRows, m.numCols.toInt, r)
   }
 
+  def norm(implicit n: Numeric[V]): BDV[Double] =
+    normalizeByCol._2
+
   def normalizeByCol(
       implicit n: Numeric[V]): (IndexedRowMatrix[Double], BDV[Double]) =
     n match {
@@ -220,8 +223,18 @@ class IndexedRowMatrix[
       case _ => sys.error("Operation on unsupported type.")
     }
 
-  def :~==(m: IndexedRowMatrix[V], tol: Double = 1e-6)(
-      implicit n: Numeric[V]): Boolean = {
+  /***
+    * Elementwise approximately equality.
+    *
+    * @param m          another matrix.
+    * @param tol        tolerance.
+    * @param n          implicit Numeric.
+    * @param approxEq   implicit CanApproximatelyEqual.
+    * @return           equality.
+    */
+  def :~==(m: IndexedRowMatrix[V], tol: Double = 1e-3)(
+      implicit n: Numeric[V],
+      approxEq: CanApproximatelyEqual[V]): Boolean = {
     if ((numRows != m.numRows) || (numCols != m.numCols)) false
     else {
       val rows1 = storage.map(row => (row.ridx, row.rvec))
@@ -235,8 +248,14 @@ class IndexedRowMatrix[
 
           (rvec1, rvec2) match {
             case (None, None) => sys.error("should not happen")
-            case (Some(_), None) => false
-            case (None, Some(_)) => false
+            case (Some(_), None) =>
+              rvec1.get
+                .map(v => isClose(n.toDouble(v), 0d, tol))
+                .reduce(_ && _)
+            case (None, Some(_)) =>
+              rvec2.get
+                .map(v => isClose(0d, n.toDouble(v), tol))
+                .reduce(_ && _)
             case (Some(_), Some(_)) =>
               isClose(rvec1.get.map(n.toDouble),
                       rvec2.get.map(n.toDouble),

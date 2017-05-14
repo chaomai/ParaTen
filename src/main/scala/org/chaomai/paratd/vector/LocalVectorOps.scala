@@ -7,7 +7,7 @@ import org.chaomai.paratd.support.CanUse
 /**
   * Created by chaomai on 14/05/2017.
   */
-object LocalVector {
+object LocalVectorOps {
   def >*[V: Semiring: CanUse](v1: BDV[V], v2: BDV[V]): V = {
     require(v1.size == v2.size,
             s"Requires inner product, "

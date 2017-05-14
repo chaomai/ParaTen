@@ -183,10 +183,11 @@ class TestCoordinateTensor extends UnitSpec {
 
   it should "perform cp decomposition on a dense tensor" in {
     implicit val sc = Common.sparkContext
+    sc.setLogLevel("OFF")
 
     val t = Common.dim4DenseTensor
     val rank = 3
-    val cpRet = CoordinateTensor.paraCP(t, rank, maxIter = 20, tries = 1)
+    val cpRet = CoordinateTensor.paraCP(t, rank, tol = 1e-3, tries = 2)
 
     val fms = cpRet._1
     val l = cpRet._2
@@ -196,18 +197,27 @@ class TestCoordinateTensor extends UnitSpec {
 
     val t1 = CoordinateTensor.fromFacMats(t.shape, rank, fms, l)
     println(t1)
+
+    assert(t.:~==(t1, 3))
   }
 
-//  it should "perform cp decomposition on a sparse tensor" in {
-//    implicit val sc = Common.sparkContext
-//
-//    val t = Common.dim4SparseTensor
-//    val cpRet = CoordinateTensor.paraCP(t, 3, maxIter = 5, tries = 1)
-//
-//    val fms = cpRet._1
-//    val l = cpRet._2
-//
-//    fms.foreach(e => println(e.toDenseMatrix))
-//    println(l)
-//  }
+  it should "perform cp decomposition on a sparse tensor" in {
+    implicit val sc = Common.sparkContext
+    sc.setLogLevel("OFF")
+
+    val t = Common.dim4SparseTensor
+    val rank = 3
+    val cpRet = CoordinateTensor.paraCP(t, rank, tol = 1e-3, tries = 2)
+
+    val fms = cpRet._1
+    val l = cpRet._2
+
+    fms.foreach(e => println(e.toDenseMatrix))
+    println(l)
+
+    val t1 = CoordinateTensor.fromFacMats(t.shape, rank, fms, l)
+    println(t1)
+
+    assert(t.:~==(t1, 3))
+  }
 }

@@ -122,8 +122,9 @@ class TestIndexedRowMatrix extends UnitSpec {
       IndexedRowMatrix.vals(Seq(0.1, 0.2), Seq(0.3, 0.4), Seq(0.3, 0.6))
     val m4 = IndexedRowMatrix.zeros[Double](3, 2)
 
-    assert(m1 :~== m2)
-    assert(!(m1 :~== m3))
-    assert(!(m1 :~== m4))
+    assert(m1.:~==(m2, 1e-3))
+    assert(!m1.:~==(m3, 1e-3))
+    assert(!m1.:~==(m4, 1e-3))
+    assert(m1.:~==(m4, 1))
   }
 }
