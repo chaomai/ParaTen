@@ -138,3 +138,10 @@ def myFunction[T: CanUse](x: T) = {
 //-------------------------------
 
 isClose(DenseVector[Double](1, 2, 3, 4), DenseVector[Double](1, 2, 3, 5))
+
+DenseVector[Double](1, 2, 3, 4).foldLeft("") { (acc, v) =>
+  (acc, v) match {
+    case ("", _) => acc + v.toString
+    case _ => acc + " " + v.toString
+  }
+}

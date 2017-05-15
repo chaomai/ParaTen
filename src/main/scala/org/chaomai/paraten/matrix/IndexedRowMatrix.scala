@@ -57,6 +57,8 @@ class IndexedRowMatrix[
 
   def mapStorage[U: ClassTag](f: IndexedRow[V] => U): RDD[U] = storage.map(f)
 
+  def saveAsTextFile(path: String): Unit = storage.saveAsTextFile(path)
+
   def addRow(row: RDD[IndexedRow[V]]): IndexedRowMatrix[V] = {
     IndexedRowMatrix(numRows, numCols, storage.union(row))
   }

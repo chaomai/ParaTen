@@ -8,21 +8,21 @@ import org.chaomai.paraten.{Common, UnitSpec}
   */
 class TestIndexedColumnMatrix extends UnitSpec {
   "Object IndexedColumnMatrix" should "build zeros matrix" in {
-    implicit val sc = Common.sparkContext
+    implicit val sc = Common.sc
     val m = IndexedColumnMatrix.zeros[Double](5, 4)
     println(m.toDenseMatrix)
     println(m.toCSCMatrix)
   }
 
   it should "build rand matrix" in {
-    implicit val sc = Common.sparkContext
+    implicit val sc = Common.sc
     val m = IndexedColumnMatrix.rand[Double](5, 4)
     println(m.toDenseMatrix)
     println(m.toCSCMatrix)
   }
 
   it should "build from seq" in {
-    implicit val sc = Common.sparkContext
+    implicit val sc = Common.sc
     val m = IndexedColumnMatrix.vals(Seq(1, 2), Seq(3, 4), Seq(0, 6))
 
     println(m.toDenseMatrix)
@@ -34,7 +34,7 @@ class TestIndexedColumnMatrix extends UnitSpec {
   }
 
   "A IndexedColumnMatrix" should "perform transformation" in {
-    implicit val sc = Common.sparkContext
+    implicit val sc = Common.sc
     val m = IndexedColumnMatrix.vals(Seq(1, 2), Seq(3, 4), Seq(0, 6))
 
     val mt = m.t
@@ -48,7 +48,7 @@ class TestIndexedColumnMatrix extends UnitSpec {
   }
 
   it should "perform matrix with transformed IndexedColumnMatrix" in {
-    implicit val sc = Common.sparkContext
+    implicit val sc = Common.sc
     val m = IndexedColumnMatrix.vals(Seq(1, 2), Seq(3, 4), Seq(5, 6))
 
     val p = m * m.t
@@ -59,7 +59,7 @@ class TestIndexedColumnMatrix extends UnitSpec {
   }
 
   it should "perform matrix with zero-valued IndexedRowMatrix" in {
-    implicit val sc = Common.sparkContext
+    implicit val sc = Common.sc
     val m = IndexedColumnMatrix.vals(Seq(1, 2), Seq(3, 4), Seq(5, 6))
     val m1 = IndexedRowMatrix.zeros[Int](3, 2)
 

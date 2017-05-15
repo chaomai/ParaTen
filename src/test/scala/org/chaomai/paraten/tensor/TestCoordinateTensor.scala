@@ -8,7 +8,7 @@ import org.chaomai.paraten.{Common, UnitSpec}
   */
 class TestCoordinateTensor extends UnitSpec {
   "A TensorFactory" should "build tensor from file" in {
-    val dim = Common.sizeOfDim3Tensor
+    val dim = Common.dim3TensorSize
     val t = Common.dim3Tensor
 
     println(t)
@@ -19,7 +19,7 @@ class TestCoordinateTensor extends UnitSpec {
   }
 
   it should "build tensor from vals" in {
-    implicit val sc = Common.sparkContext
+    implicit val sc = Common.sc
 
     val es = Seq(
       TEntry((0, 0, 0, 0), 23.0),
@@ -38,7 +38,7 @@ class TestCoordinateTensor extends UnitSpec {
   }
 
   it should "build tensor from DenseVector" in {
-    implicit val sc = Common.sparkContext
+    implicit val sc = Common.sc
     val v1 = DenseVector(1, 2, 3, 4, 5)
     val t = CoordinateTensor.fromDenseVector(v1.length, v1)
 
@@ -66,14 +66,14 @@ class TestCoordinateTensor extends UnitSpec {
   }
 
   it should "check tensor equality" in {
-    implicit val sc = Common.sparkContext
+    implicit val sc = Common.sc
     val t = Common.dim4DenseTensor
 
     assert(t :~== t)
   }
 
   it should "perform tensor addition" in {
-    implicit val sc = Common.sparkContext
+    implicit val sc = Common.sc
     val t = Common.dim4DenseTensor
 
     val t1 = t :+ 1
@@ -88,7 +88,7 @@ class TestCoordinateTensor extends UnitSpec {
   }
 
   it should "perform elementwise addition with different-numbered entries" in {
-    implicit val sc = Common.sparkContext
+    implicit val sc = Common.sc
     val t = Common.dim4DenseTensor
 
     val t1 = CoordinateTensor.vals(t.shape, TEntry((0, 0, 2, 0), 5.0))
@@ -126,7 +126,7 @@ class TestCoordinateTensor extends UnitSpec {
   }
 
   it should "perform outer product with vector" in {
-    implicit val sc = Common.sparkContext
+    implicit val sc = Common.sc
     val v1 = DenseVector(1, 2, 3, 4, 5)
     val t = CoordinateTensor.fromDenseVector(v1.length, v1)
 
@@ -150,7 +150,7 @@ class TestCoordinateTensor extends UnitSpec {
   }
 
   it should "perform n-mode product" in {
-    implicit val sc = Common.sparkContext
+    implicit val sc = Common.sc
     val t = Common.dim4DenseTensor
     val v = sc.broadcast(DenseVector[Double](2, 2, 3))
 
@@ -182,12 +182,12 @@ class TestCoordinateTensor extends UnitSpec {
   }
 
   it should "perform cp decomposition on a dense tensor" in {
-    implicit val sc = Common.sparkContext
-    sc.setLogLevel("OFF")
+    implicit val sc = Common.sc
+    sc.setLogLevel("WARN")
 
     val t = Common.dim4DenseTensor
     val rank = 3
-    val cpRet = CoordinateTensor.paraCP(t, rank, tol = 1e-3, tries = 2)
+    val cpRet = CoordinateTensorOps.paraCP(t, rank, maxIter = 25, tries = 2)
 
     val fms = cpRet._1
     val l = cpRet._2
@@ -202,12 +202,12 @@ class TestCoordinateTensor extends UnitSpec {
   }
 
   it should "perform cp decomposition on a sparse tensor" in {
-    implicit val sc = Common.sparkContext
-    sc.setLogLevel("OFF")
+    implicit val sc = Common.sc
+    sc.setLogLevel("WARN")
 
     val t = Common.dim4SparseTensor
     val rank = 3
-    val cpRet = CoordinateTensor.paraCP(t, rank, tol = 1e-3, tries = 2)
+    val cpRet = CoordinateTensorOps.paraCP(t, rank, maxIter = 25, tries = 2)
 
     val fms = cpRet._1
     val l = cpRet._2

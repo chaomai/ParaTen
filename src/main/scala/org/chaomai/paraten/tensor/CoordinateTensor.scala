@@ -170,7 +170,7 @@ class CoordinateTensor[V: ClassTag: Semiring: CanUse](
     *
     * @param m  mode.
     * @param v  vector.
-    * @return   tensor that dimension of m is 1.
+    * @return   tensor that dimension m is 1.
     */
   def nModeProd(m: Int, v: DenseVector[V])(
       implicit n: Numeric[V]): CoordinateTensor[V] = {
@@ -216,6 +216,104 @@ class CoordinateTensor[V: ClassTag: Semiring: CanUse](
 }
 
 object CoordinateTensor {
+  def zero[V: ClassTag: Semiring: CanUse](sv: IndexedSeq[Int])(
+      implicit sc: SparkContext): CoordinateTensor[V] = {
+    CoordinateTensor(sv, sc.emptyRDD[TEntry[V]])
+  }
+
+  def vals[V: ClassTag: Semiring: CanUse](sv: IndexedSeq[Int], vs: TEntry[V]*)(
+      implicit sc: SparkContext): CoordinateTensor[V] =
+    CoordinateTensor[V](sv, sc.parallelize(vs))
+
+  def apply[V: ClassTag: Semiring: CanUse](
+      sv: IndexedSeq[Int],
+      rdd: RDD[TEntry[V]]): CoordinateTensor[V] = {
+    new CoordinateTensor[V](sv, rdd)
+  }
+
+  def fromDenseVector[V: ClassTag: Semiring: CanUse](
+      sv: Int,
+      v: DenseVector[V])(implicit sc: SparkContext): CoordinateTensor[V] = {
+    val entries = v
+      .mapPairs((idx, v) => TEntry(idx, v))
+      .toArray
+      .toSeq
+
+    CoordinateTensor(IndexedSeq(sv), sc.parallelize(entries))
+  }
+
+  def fromFile(path: String, sv: IndexedSeq[Int])(
+      implicit sc: SparkContext): CoordinateTensor[Double] = {
+    val dim = sv.length
+    val entries = sc
+      .textFile(path)
+      .map { l =>
+        val arr = l.split(" ").map(_.trim)
+        TEntry(Coordinate(arr.take(dim).map(_.toInt).toIndexedSeq),
+               arr(dim).toDouble)
+      }
+
+    CoordinateTensor(sv, entries)
+  }
+
+  def fromFacMats(shape: IndexedSeq[Int],
+                  rank: Int,
+                  mats: IndexedSeq[IndexedRowMatrix[Double]],
+                  lambda: DenseVector[Double])(
+      implicit sc: SparkContext): CoordinateTensor[Double] = {
+    (0 until rank).foldLeft(CoordinateTensor.zero[Double](shape)) {
+      (accten, r) =>
+        val initTen =
+          CoordinateTensor.fromDenseVector(shape(0), mats.head.localColAt(r))
+
+        val facMatsIdxs = mats.indices.tail
+
+        val tmpten = facMatsIdxs.foldLeft(initTen) { (acc, idx) =>
+          val broadRow = sc.broadcast(mats(idx).localColAt(r))
+          val prod = acc <* broadRow.value
+          broadRow.unpersist()
+          prod
+        }
+
+        accten :+ (tmpten :* lambda(r))
+    }
+  }
+}
+
+object CoordinateTensorOps {
+  def elementwiseOp[V: ClassTag: Semiring: CanUse,
+                    U: ClassTag: Semiring: CanUse,
+                    W: ClassTag: Semiring: CanUse](t1: CoordinateTensor[V],
+                                                   t2: CoordinateTensor[U])(
+      f1: (V, U) => W)(f2: V => W)(f3: U => W): CoordinateTensor[W] = {
+    require(t1.shape == t2.shape,
+            s"Required elementwise operation, " +
+              s"but get t1.shape = ${t1.shape} and t2.shape = ${t2.shape}")
+
+    val shape = t1.shape
+
+    val tp1 = t1.mapStorage(e => (e.coordinate, e.value))
+    val tp2 = t2.mapStorage(e => (e.coordinate, e.value))
+
+    val tn = tp1
+      .fullOuterJoin(tp2)
+      .map { x =>
+        val coord = x._1
+        val e1 = x._2._1
+        val e2 = x._2._2
+
+        (e1, e2) match {
+          case (None, None) => sys.error("should not happen")
+          case (Some(_), None) => TEntry(coord, f2(e1.get))
+          case (None, Some(_)) => TEntry(coord, f3(e2.get))
+          case (Some(_), Some(_)) =>
+            TEntry(coord, f1(e1.get, e2.get))
+        }
+      }
+
+    CoordinateTensor(shape, tn)
+  }
+
   private def decoupledKR(
       tensor: CoordinateTensor[Double],
       facMats: IndexedSeq[IndexedRowMatrix[Double]],
@@ -233,7 +331,7 @@ object CoordinateTensor {
         breadCol.unpersist()
         prod
       }
-      accmat.addEntry(tmpten.storage.map(e =>
+      accmat.addEntry(tmpten.mapStorage(e =>
         TEntry(e.coordinate dimKept dim appendDim r, e.value)))
     }
 
@@ -334,9 +432,15 @@ object CoordinateTensor {
         CoordinateTensor.fromFacMats(shape, rank, facMats, lambda)
       reconsLoss = loss(tensor :- reconsTen)
 
-      println("iter: %d, loss: %f".format(iter, reconsLoss))
-      facMats.foreach(e => println(e.toDenseMatrix))
+      println("total iter: %d, loss: %f".format(iter, reconsLoss))
+      println("factor matrices:")
+      facMats.zipWithIndex.foreach { e =>
+        println("factor mactrix %d:".format(e._2))
+        println(e._1.toDenseMatrix)
+      }
+      println("lambda vector:")
       println(lambda)
+      println("reconstructed tensor:")
       println(reconsTen)
 
       // set current best
@@ -348,103 +452,5 @@ object CoordinateTensor {
     }
 
     (optimalFacMats, optimalLambda)
-  }
-
-  def zero[V: ClassTag: Semiring: CanUse](sv: IndexedSeq[Int])(
-      implicit sc: SparkContext): CoordinateTensor[V] = {
-    CoordinateTensor(sv, sc.emptyRDD[TEntry[V]])
-  }
-
-  def vals[V: ClassTag: Semiring: CanUse](sv: IndexedSeq[Int], vs: TEntry[V]*)(
-      implicit sc: SparkContext): CoordinateTensor[V] =
-    CoordinateTensor[V](sv, sc.parallelize(vs))
-
-  def apply[V: ClassTag: Semiring: CanUse](
-      sv: IndexedSeq[Int],
-      rdd: RDD[TEntry[V]]): CoordinateTensor[V] = {
-    new CoordinateTensor[V](sv, rdd)
-  }
-
-  def fromDenseVector[V: ClassTag: Semiring: CanUse](
-      sv: Int,
-      v: DenseVector[V])(implicit sc: SparkContext): CoordinateTensor[V] = {
-    val entries = v
-      .mapPairs((idx, v) => TEntry(idx, v))
-      .toArray
-      .toSeq
-
-    CoordinateTensor(IndexedSeq(sv), sc.parallelize(entries))
-  }
-
-  def fromFile(path: String, sv: IndexedSeq[Int])(
-      implicit sc: SparkContext): CoordinateTensor[Double] = {
-    val dim = sv.length
-    val entries = sc
-      .textFile(path)
-      .map { l =>
-        val arr = l.split(" ").map(_.trim)
-        TEntry(Coordinate(arr.take(dim).map(_.toInt).toIndexedSeq),
-               arr(dim).toDouble)
-      }
-
-    CoordinateTensor(sv, entries)
-  }
-
-  def fromFacMats(shape: IndexedSeq[Int],
-                  rank: Int,
-                  mats: IndexedSeq[IndexedRowMatrix[Double]],
-                  lambda: DenseVector[Double])(
-      implicit sc: SparkContext): CoordinateTensor[Double] = {
-    (0 until rank).foldLeft(CoordinateTensor.zero[Double](shape)) {
-      (accten, r) =>
-        val initTen =
-          CoordinateTensor.fromDenseVector(shape(0), mats.head.localColAt(r))
-
-        val facMatsIdxs = mats.indices.tail
-
-        val tmpten = facMatsIdxs.foldLeft(initTen) { (acc, idx) =>
-          val broadRow = sc.broadcast(mats(idx).localColAt(r))
-          val prod = acc <* broadRow.value
-          broadRow.unpersist()
-          prod
-        }
-
-        accten :+ (tmpten :* lambda(r))
-    }
-  }
-}
-
-private object CoordinateTensorOps {
-  def elementwiseOp[V: ClassTag: Semiring: CanUse,
-                    U: ClassTag: Semiring: CanUse,
-                    W: ClassTag: Semiring: CanUse](t1: CoordinateTensor[V],
-                                                   t2: CoordinateTensor[U])(
-      f1: (V, U) => W)(f2: V => W)(f3: U => W): CoordinateTensor[W] = {
-    require(t1.shape == t2.shape,
-            s"Required elementwise operation, " +
-              s"but get t1.shape = ${t1.shape} and t2.shape = ${t2.shape}")
-
-    val shape = t1.shape
-
-    val tp1 = t1.mapStorage(e => (e.coordinate, e.value))
-    val tp2 = t2.mapStorage(e => (e.coordinate, e.value))
-
-    val tn = tp1
-      .fullOuterJoin(tp2)
-      .map { x =>
-        val coord = x._1
-        val e1 = x._2._1
-        val e2 = x._2._2
-
-        (e1, e2) match {
-          case (None, None) => sys.error("should not happen")
-          case (Some(_), None) => TEntry(coord, f2(e1.get))
-          case (None, Some(_)) => TEntry(coord, f3(e2.get))
-          case (Some(_), Some(_)) =>
-            TEntry(coord, f1(e1.get, e2.get))
-        }
-      }
-
-    CoordinateTensor(shape, tn)
   }
 }

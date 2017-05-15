@@ -8,21 +8,21 @@ import org.chaomai.paraten.{Common, UnitSpec}
   */
 class TestIndexedRowMatrix extends UnitSpec {
   "Object IndexedRowMatrix" should "build zeros matrix" in {
-    implicit val sc = Common.sparkContext
+    implicit val sc = Common.sc
     val m = IndexedRowMatrix.zeros[Double](5, 4)
     println(m.toDenseMatrix)
     println(m.toCSCMatrix)
   }
 
   it should "build rand matrix" in {
-    implicit val sc = Common.sparkContext
+    implicit val sc = Common.sc
     val m = IndexedRowMatrix.rand[Double](5, 4)
     println(m.toDenseMatrix)
     println(m.toCSCMatrix)
   }
 
   it should "build from seq" in {
-    implicit val sc = Common.sparkContext
+    implicit val sc = Common.sc
     val m = IndexedRowMatrix.vals(Seq(1, 2), Seq(3, 4), Seq(0, 6))
 
     println(m.toDenseMatrix)
@@ -34,14 +34,14 @@ class TestIndexedRowMatrix extends UnitSpec {
   }
 
   "A IndexedRowMatrix" should "get column" in {
-    implicit val sc = Common.sparkContext
+    implicit val sc = Common.sc
     val m = IndexedRowMatrix.vals(Seq(1, 2), Seq(3, 4), Seq(0, 6))
 
     assert(m.localColAt(1) == DenseVector(2, 4, 6))
   }
 
   it should "perform transformation" in {
-    implicit val sc = Common.sparkContext
+    implicit val sc = Common.sc
     val m = IndexedRowMatrix.vals(Seq(1, 2), Seq(3, 4), Seq(0, 6))
 
     val mt = m.t
@@ -55,7 +55,7 @@ class TestIndexedRowMatrix extends UnitSpec {
   }
 
   it should "perform matrix product with DenseMatrix" in {
-    implicit val sc = Common.sparkContext
+    implicit val sc = Common.sc
     val m = IndexedRowMatrix.vals(Seq(1, 2), Seq(3, 4), Seq(5, 6))
     val dm = DenseMatrix((1, 2), (3, 4))
 
@@ -67,7 +67,7 @@ class TestIndexedRowMatrix extends UnitSpec {
   }
 
   it should "perform matrix product with transformed IndexedRowMatrix" in {
-    implicit val sc = Common.sparkContext
+    implicit val sc = Common.sc
     val m = IndexedRowMatrix.vals(Seq(1, 2), Seq(3, 4), Seq(5, 6))
 
     val p = m * m.t
@@ -79,7 +79,7 @@ class TestIndexedRowMatrix extends UnitSpec {
   }
 
   it should "perform transformed matrix product with IndexedRowMatrix" in {
-    implicit val sc = Common.sparkContext
+    implicit val sc = Common.sc
     val m = IndexedRowMatrix.vals(Seq(1, 2), Seq(3, 4), Seq(5, 6))
 
     val p = m.t * m
@@ -90,7 +90,7 @@ class TestIndexedRowMatrix extends UnitSpec {
   }
 
   it should "perform normalization" in {
-    implicit val sc = Common.sparkContext
+    implicit val sc = Common.sc
     val m =
       IndexedRowMatrix.vals(Seq(1.0, 2.0), Seq(3.0, 4.0), Seq(5.0, 6.0))
 
@@ -113,7 +113,7 @@ class TestIndexedRowMatrix extends UnitSpec {
   }
 
   it should "check equality" in {
-    implicit val sc = Common.sparkContext
+    implicit val sc = Common.sc
     val m1 =
       IndexedRowMatrix.vals(Seq(0.1, 0.2), Seq(0.3, 0.4), Seq(0.5, 0.6))
     val m2 =

@@ -9,7 +9,7 @@ import org.chaomai.paraten.{Common, UnitSpec}
   */
 class TestCoordinateMatrix extends UnitSpec {
   "Object CoordinateMatrix" should "build zeros matrix" in {
-    implicit val sc = Common.sparkContext
+    implicit val sc = Common.sc
     val m = CoordinateMatrix.zeros[Double](5, 4)
     println(m)
     println(m.toDenseMatrix)
@@ -17,7 +17,7 @@ class TestCoordinateMatrix extends UnitSpec {
   }
 
   it should "build rand matrix" in {
-    implicit val sc = Common.sparkContext
+    implicit val sc = Common.sc
     val m = CoordinateMatrix.rand[Double](5, 4)
     println(m)
     println(m.toDenseMatrix)
@@ -25,7 +25,7 @@ class TestCoordinateMatrix extends UnitSpec {
   }
 
   it should "build from seq" in {
-    implicit val sc = Common.sparkContext
+    implicit val sc = Common.sc
     val m = CoordinateMatrix.vals(Seq(1, 2), Seq(3, 4), Seq(0, 6))
     println(m)
 
@@ -57,7 +57,7 @@ class TestCoordinateMatrix extends UnitSpec {
   }
 
   "CoordinateMatrix" should "get row" in {
-    implicit val sc = Common.sparkContext
+    implicit val sc = Common.sc
     val m = CoordinateMatrix.rand[Double](5, 4)
     println(m)
     println(m.rowAt(3))
@@ -65,7 +65,7 @@ class TestCoordinateMatrix extends UnitSpec {
   }
 
   it should "perform tProd" in {
-    implicit val sc = Common.sparkContext
+    implicit val sc = Common.sc
     val m = CoordinateMatrix.vals(Seq(1, 2), Seq(3, 4), Seq(5, 6))
 
     val p = m.tProd
@@ -74,7 +74,7 @@ class TestCoordinateMatrix extends UnitSpec {
   }
 
   it should "perform matrix product with DenseMatrix" in {
-    implicit val sc = Common.sparkContext
+    implicit val sc = Common.sc
     val m = CoordinateMatrix.vals(Seq(1, 2), Seq(3, 4), Seq(5, 6))
     val dm = DenseMatrix((1, 2), (3, 4))
 
@@ -85,7 +85,7 @@ class TestCoordinateMatrix extends UnitSpec {
   }
 
   it should "perform normalization" in {
-    implicit val sc = Common.sparkContext
+    implicit val sc = Common.sc
     val m = CoordinateMatrix.vals(Seq(1.0, 2.0), Seq(3.0, 4.0), Seq(5.0, 6.0))
 
     val (nm, n) = m.normalizeByCol
