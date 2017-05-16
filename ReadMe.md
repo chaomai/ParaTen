@@ -77,7 +77,19 @@ spark://Chaos-MacBook-Pro.local:6066 \
 
 5. Example decomposition
 
-TODO
+* original image
+
+![lenna](https://github.com/ChaoMai/paraten/blob/master/src/test/resources/data/lenna_hires_head.jpg)
+
+* set rank to 1000, iteration until converged
+
+| top k rank | norm | image |
+| --- | --- | --- |
+| 200 |  |  |
+| 400 |  |  |
+| 600 |  |  |
+| 800 |  |  |
+| 1000 |  |  |
 
 ## References
 
