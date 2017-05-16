@@ -15,10 +15,18 @@
 2. Compile and package
 
 ```bash
+# package without dependencies
 sbt package
 ```
 
 It will produce package `target/scala-2.11/paraten_2.11-1.0.jar`.
+
+```bash
+# package with all dependencies
+sbt assembly
+```
+
+You will get a big package `target/scala-2.11/ParaTen-assembly-1.0.jar`.
 
 3. Usage
 
@@ -81,7 +89,13 @@ spark://Chaos-MacBook-Pro.local:6066 \
 
 ![lenna](https://github.com/ChaoMai/paraten/blob/master/src/test/resources/data/lenna_hires_head.jpg)
 
-* set rank to 1000, iteration until converged
+* reconstruct image by factor matrix
+
+Set rank to 1000, iterate until converged. Pickup top k rank according to lambda vector and reconstruct the tensor i.e. the image.
+
+$$
+norm = \lVert\mathcal{X} - \mathcal{X}'\lVert = \sqrt{\sum^{I_1}_{i_1 = 1} \sum^{I_2}_{i_2 = 1} \cdots \sum^{I_N}_{i_N = 1} (x_{i_1 i_2 \cdots i_N} - x'_{i_1 i_2 \cdots i_N})^2}
+$$
 
 | top k rank | norm | image |
 | --- | --- | --- |
