@@ -1,19 +1,11 @@
 package org.chaomai.paraten.tensor
 
-import breeze.linalg.{
-  isClose,
-  norm,
-  pinv,
-  DenseMatrix,
-  DenseVector,
-  SparseVector,
-  VectorBuilder
-}
+import breeze.linalg.{isClose, DenseVector, SparseVector, VectorBuilder}
 import breeze.math.Semiring
-import breeze.stats.distributions.Gaussian
+import breeze.numerics.sqrt
 import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
-import org.chaomai.paraten.matrix.{CoordinateMatrix, IndexedRowMatrix}
+import org.chaomai.paraten.matrix.IndexedRowMatrix
 import org.chaomai.paraten.support.{CanApproximatelyEqual, CanUse}
 import org.chaomai.paraten.vector.LocalVectorOps
 
@@ -50,6 +42,26 @@ class CoordinateTensor[V: ClassTag: Semiring: CanUse](
     storage.reduce(f)
 
   def collect: Array[TEntry[V]] = storage.collect()
+
+  /***
+    * Norm of a tensor.
+    * @param n  implicit Numeric.
+    * @return   norm.
+    */
+  def norm(implicit n: Numeric[V]): Double = {
+    val fibers = fibersOnMode(0)
+    val sqrSumOfNorm = fibers
+      .map { p =>
+        val (fi, _) = (p._1, p._2)
+        fi.map(v => n.times(v, v)).reduce(n.plus)
+      }
+      .mapPartitions { ns =>
+        Iterator.single(ns.foldLeft(n.zero)((acc, v) => n.plus(acc, v)))
+      }
+      .reduce(n.plus)
+
+    sqrt(n.toDouble(sqrSumOfNorm))
+  }
 
   /***
     * Elementwise approximately equality.
@@ -312,145 +324,5 @@ object CoordinateTensorOps {
       }
 
     CoordinateTensor(shape, tn)
-  }
-
-  private def decoupledKR(
-      tensor: CoordinateTensor[Double],
-      facMats: IndexedSeq[IndexedRowMatrix[Double]],
-      dim: Int)(implicit sc: SparkContext): IndexedRowMatrix[Double] = {
-    val shape = tensor.shape
-    val rank = facMats.head.numCols
-
-    val initfmat = CoordinateMatrix.zeros[Double](shape(dim), rank)
-    val krProdMatIdxs = facMats.indices.filter(_ != dim)
-
-    val fmat = (0 until rank).foldLeft(initfmat) { (accmat, r) =>
-      val tmpten = krProdMatIdxs.foldLeft(tensor) { (accten, idx) =>
-        val breadCol = sc.broadcast(facMats(idx).localColAt(r))
-        val prod = accten nModeProd (idx, breadCol.value)
-        breadCol.unpersist()
-        prod
-      }
-      accmat.addEntry(tmpten.mapStorage(e =>
-        TEntry(e.coordinate dimKept dim appendDim r, e.value)))
-    }
-
-    fmat.toIndexedRowMatrix
-  }
-
-  private def paraOuterPinv(facMats: IndexedSeq[IndexedRowMatrix[Double]],
-                            dim: Int): DenseMatrix[Double] = {
-    val rank = facMats.head.numCols
-    val outerProdMatIdxs = facMats.indices.filter(_ != dim)
-
-    val prod =
-      outerProdMatIdxs.foldLeft(DenseMatrix.ones[Double](rank, rank)) {
-        (acc, idx) =>
-          val fm = facMats(idx)
-          acc :* (fm.t * fm)
-      }
-
-    pinv(prod)
-  }
-
-  private def paraMatrixProd(decopkr: IndexedRowMatrix[Double],
-                             m: DenseMatrix[Double])(
-      implicit sc: SparkContext): IndexedRowMatrix[Double] = {
-    val broadm = sc.broadcast(m)
-    val prod = decopkr * broadm.value
-    broadm.unpersist()
-    prod
-  }
-
-  private def loss(t: CoordinateTensor[Double]): Double = {
-    val fibers = t.fibersOnMode(0)
-    val norms = fibers
-      .map { p =>
-        val (fi, _) = (p._1, p._2)
-        norm(fi)
-      }
-      .collect()
-      .toSeq
-
-    norm(DenseVector(norms: _*))
-  }
-
-  /***
-    * CP Decomposition via ALS on Spark.
-    *
-    * @param tensor   CoordinateTensor.
-    * @param rank     rank.
-    * @param maxIter  max iterations.
-    * @param tol      tolerance.
-    * @param tries    number of tries.
-    * @return         I_n * r matrices, vector of all the eigenvalues.
-    */
-  def paraCP(tensor: CoordinateTensor[Double],
-             rank: Int,
-             maxIter: Int = 500,
-             tol: Double = 1e-3,
-             tries: Int = 3)(implicit sc: SparkContext)
-    : (IndexedSeq[IndexedRowMatrix[Double]], DenseVector[Double]) = {
-
-    val shape = tensor.shape
-
-    var optimalFacMats: IndexedSeq[IndexedRowMatrix[Double]] =
-      shape.map(IndexedRowMatrix.zeros[Double](_, rank))
-    var optimalLambda = DenseVector.zeros[Double](rank)
-    var reconsLoss: Double = 0.0
-    var optimalReconsLoss: Double = Double.PositiveInfinity
-
-    for (_ <- 0 until tries) {
-      var facMats = shape.map(
-        IndexedRowMatrix
-          .rand[Double](_, rank, Gaussian(mu = 0.0, sigma = 1.0)))
-
-      var prevHead = IndexedRowMatrix.zeros[Double](shape(0), rank)
-
-      var lambda = DenseVector.zeros[Double](rank)
-
-      var iter = 0
-      while ((iter < maxIter) && !prevHead.:~==(facMats.head, tol)) {
-        iter += 1
-
-        for (idx <- shape.indices) {
-          val decopkr = decoupledKR(tensor, facMats, idx)
-          val pinv = paraOuterPinv(facMats, idx)
-          val fm = paraMatrixProd(decopkr, pinv)
-
-          val (m, l) = fm.normalizeByCol
-
-          facMats = facMats.updated(idx, m)
-          lambda = l
-        }
-
-        println("iter: %d".format(iter))
-      }
-
-      // get loss
-      val reconsTen =
-        CoordinateTensor.fromFacMats(shape, rank, facMats, lambda)
-      reconsLoss = loss(tensor :- reconsTen)
-
-      println("total iter: %d, loss: %f".format(iter, reconsLoss))
-      println("factor matrices:")
-      facMats.zipWithIndex.foreach { e =>
-        println("factor mactrix %d:".format(e._2))
-        println(e._1.toDenseMatrix)
-      }
-      println("lambda vector:")
-      println(lambda)
-      println("reconstructed tensor:")
-      println(reconsTen)
-
-      // set current best
-      if (reconsLoss < optimalReconsLoss) {
-        optimalFacMats = facMats
-        optimalLambda = lambda
-        optimalReconsLoss = reconsLoss
-      }
-    }
-
-    (optimalFacMats, optimalLambda)
   }
 }

@@ -1,7 +1,7 @@
 
 # Created by https://www.gitignore.io/api/windows,linux,macos,scala,sbt,intellij
 
-lenna*
+lenna*.tensor
 result
 
 ### Intellij ###

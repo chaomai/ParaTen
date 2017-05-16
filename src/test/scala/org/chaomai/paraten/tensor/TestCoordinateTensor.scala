@@ -180,44 +180,4 @@ class TestCoordinateTensor extends UnitSpec {
 
     assert(nModeProd :~== t1)
   }
-
-  it should "perform cp decomposition on a dense tensor" in {
-    implicit val sc = Common.sc
-    sc.setLogLevel("WARN")
-
-    val t = Common.dim4DenseTensor
-    val rank = 3
-    val cpRet = CoordinateTensorOps.paraCP(t, rank, maxIter = 25, tries = 2)
-
-    val fms = cpRet._1
-    val l = cpRet._2
-
-    fms.foreach(e => println(e.toDenseMatrix))
-    println(l)
-
-    val t1 = CoordinateTensor.fromFacMats(t.shape, rank, fms, l)
-    println(t1)
-
-    assert(t.:~==(t1, 3))
-  }
-
-  it should "perform cp decomposition on a sparse tensor" in {
-    implicit val sc = Common.sc
-    sc.setLogLevel("WARN")
-
-    val t = Common.dim4SparseTensor
-    val rank = 3
-    val cpRet = CoordinateTensorOps.paraCP(t, rank, maxIter = 25, tries = 2)
-
-    val fms = cpRet._1
-    val l = cpRet._2
-
-    fms.foreach(e => println(e.toDenseMatrix))
-    println(l)
-
-    val t1 = CoordinateTensor.fromFacMats(t.shape, rank, fms, l)
-    println(t1)
-
-    assert(t.:~==(t1, 3))
-  }
 }

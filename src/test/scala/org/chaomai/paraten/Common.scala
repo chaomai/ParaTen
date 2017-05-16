@@ -1,5 +1,6 @@
 package org.chaomai.paraten
 
+import com.typesafe.scalalogging.Logger
 import org.apache.spark.{SparkConf, SparkContext}
 import org.chaomai.paraten.tensor.CoordinateTensor
 
@@ -29,6 +30,7 @@ object Common {
   val dim4DenseTensor: CoordinateTensor[Double] =
     CoordinateTensor.fromFile(dim4DenseTensorPath, dim4DenseTensorSize)(sc)
 
-  def debugMessage(str: String): Unit =
-    println("---------- %s ----------".format(str))
+  val logger: Logger = Logger("TestParaTen")
+
+  def debugMessage(str: String): Unit = println(s"---------- $str ----------")
 }
