@@ -1,12 +1,14 @@
 package org.chaomai.paraten.tensor
 
+import org.apache.spark.{SparkConf, SparkContext}
+import org.chaomai.paraten.matrix.IndexedRowMatrix
 import org.chaomai.paraten.{Common, UnitSpec}
 
 /**
   * Created by chaomai on 16/05/2017.
   */
 class TestCPALS extends UnitSpec {
-  it should "perform cp decomposition on a dense tensor" in {
+  "CPALS" should "perform cp decomposition on a dense tensor" in {
     implicit val sc = Common.sc
     sc.setLogLevel("WARN")
 

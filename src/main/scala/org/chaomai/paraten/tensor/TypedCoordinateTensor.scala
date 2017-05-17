@@ -1,38 +1,19 @@
 package org.chaomai.paraten.tensor
 
-import org.apache.spark.rdd.RDD
 import org.apache.spark.SparkContext
+import org.apache.spark.rdd.RDD
 
 /**
   * Created by chaomai on 16/04/2017.
   */
-//class TypedCoordinateTensor[Shape](sc: SparkContext,
-//                                   sv: ShapeValue[Shape],
-//                                   val storage: RDD[Entry]){
-//    extends SparseTensor[Double] {
-//  val shape: IndexedSeq[Int] = sv.shape.toIndexedSeq
-//  val dimension: Int = shape.length
-//  val size: Int = shape.product
-//}
-//
-//object TypedCoordinateTensor {
-//  def zeros[Shape](sc: SparkContext,
-//                   sv: ShapeValue[Shape]): TypedCoordinateTensor[Shape] = {
-//
-//    val rdd = sc.emptyRDD[Entry]
-//    new TypedCoordinateTensor[Shape](sc, sv, rdd)
-//  }
-//}
-//
-//class TypedTensorFactory[Shape](sv: ShapeValue[Shape], sc: SparkContext) {
-//  def zeros: TypedCoordinateTensor[Shape] =
-//    TypedCoordinateTensor.zeros(sc, sv)
-//
-//  def rand: TypedCoordinateTensor[Shape] = ???
-//}
-//
-//object TypedTensorFactory {
-//  def >[Shape](sv: ShapeValue[Shape])(
-//      implicit sc: SparkContext): TypedTensorFactory[Shape] =
-//    new TypedTensorFactory[Shape](sv, sc)
-//}
+class TypedCoordinateTensor[Shape, V](sv: ShapeValue[Shape],
+                                      val storage: RDD[TEntry[V]])
+    extends TypedTensor[Shape] {
+  val shape: IndexedSeq[Int] = sv.shape.toIndexedSeq
+  val dimension: Int = shape.length
+  val size: Int = shape.product
+}
+
+object TypedCoordinateTensor {}
+
+object TypedTensorFactory {}

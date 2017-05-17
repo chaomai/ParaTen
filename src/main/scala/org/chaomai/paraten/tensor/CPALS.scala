@@ -35,7 +35,7 @@ class CPALS(private var rank: Int = 10,
     this
   }
 
-  private def decoupledKR(
+  private def naiveKR(
       tensor: CoordinateTensor[Double],
       facMats: IndexedSeq[IndexedRowMatrix[Double]],
       dim: Int)(implicit sc: SparkContext): IndexedRowMatrix[Double] = {
@@ -59,17 +59,22 @@ class CPALS(private var rank: Int = 10,
     fmat.toIndexedRowMatrix
   }
 
-  private def paraOuterPinv(facMats: IndexedSeq[IndexedRowMatrix[Double]],
-                            dim: Int): DenseMatrix[Double] = {
-    val rank = facMats.head.numCols
+  private def paraOuterPinv(
+      facMats: IndexedSeq[IndexedRowMatrix[Double]],
+      dim: Int,
+      rank: Int)(implicit sc: SparkContext): DenseMatrix[Double] = {
     val outerProdMatIdxs = facMats.indices.filter(_ != dim)
+    val rowsOfFacMats = outerProdMatIdxs
+      .map(idx => facMats(idx).mapStorage(row => (idx, row)))
+
+    val rows = sc.union(rowsOfFacMats)
+
+    val prodByKey = rows.aggregateByKey(DenseMatrix.zeros[Double](rank, rank))(
+      (acc, row) => acc + row.rvec * row.rvec.t,
+      (m1, m2) => m1 + m2)
 
     val prod =
-      outerProdMatIdxs.foldLeft(DenseMatrix.ones[Double](rank, rank)) {
-        (acc, idx) =>
-          val fm = facMats(idx)
-          acc :* (fm.t * fm)
-      }
+      prodByKey.map(_._2).reduce(_ :* _)
 
     pinv(prod)
   }
@@ -101,7 +106,7 @@ class CPALS(private var rank: Int = 10,
     var reconsLoss: Double = Double.PositiveInfinity
     var optimalReconsLoss: Double = Double.PositiveInfinity
 
-    var prevLoss = reconsLoss
+    var prevLoss = 0.0
 
     var ntries = 0
     while ((ntries < tries) && !isClose(reconsLoss, prevLoss, tol)) {
@@ -117,8 +122,8 @@ class CPALS(private var rank: Int = 10,
         iter += 1
 
         for (idx <- shape.indices) {
-          val decopkr = decoupledKR(tensor, facMats, idx)
-          val pinv = paraOuterPinv(facMats, idx)
+          val decopkr = naiveKR(tensor, facMats, idx)
+          val pinv = paraOuterPinv(facMats, idx, rank)
           val fm = paraMatrixProd(decopkr, pinv)
 
           val (m, l) = fm.normalizeByCol
