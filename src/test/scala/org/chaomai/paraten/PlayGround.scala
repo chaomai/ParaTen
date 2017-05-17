@@ -1,7 +1,5 @@
 package org.chaomai.paraten
 
-import com.typesafe.scalalogging.Logger
-
 /**
   * Created by chaomai on 14/05/2017.
   */
@@ -9,13 +7,6 @@ object PlayGround {
 
   def main(args: Array[String]): Unit = {
     Tup((1, 2), (3, 4), (0, 6))
-
-    implicit val sc = Common.sc
-
-    val logger = Logger("PlayGround")
-
-    logger.info("info msg")
-    logger.warn("warn msg")
   }
 
   class Tup

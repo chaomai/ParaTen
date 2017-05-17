@@ -1,6 +1,6 @@
 # ParaTen
 
-* This project implements the CP-ALS algorithm in HaTen2 on Spark, it also implements related vector, matrix and tensor operation on Spark.
+* This project implements the CP-ALS algorithm on Spark, it also implements related vector, matrix and tensor operation on Spark.
 * The aim of this project is to utilize the power of RDD to achieve fast iteration while performing decomposition.
 * This project is also a exploration of Type-Safe tensor operation, which is enlightened by [TensorSafe](https://github.com/MrVPlusOne/TensorSafe).
 
