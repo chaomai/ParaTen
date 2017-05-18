@@ -23,7 +23,7 @@ fi
 if [ $# -ne 10 ]; then
 	 echo 1>&2 "Usage: $0 [dim_1,..,dim_N (tensor)] [rank] [tensor file path] [output path] \
 [max iteration] [tolerance] [tries] [master of Spark] \
-[total-executor-cores] [spark.executor.memory]"
+[total-executor-cores] [executor-memory]"
 	 exit 127
 fi
 

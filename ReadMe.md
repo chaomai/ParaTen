@@ -6,13 +6,13 @@
 
 ## Build and Run
 
-1. Environment
+### 1. Environment
 
 * sbt 0.13.15
 * Scala 2.11.11
 * Spark 2.1.1
 
-2. Compile and package
+### 2. Compile and package
 
 ```bash
 # package without dependencies
@@ -28,7 +28,7 @@ sbt assembly
 
 You will get a big package `target/scala-2.11/ParaTen-assembly-1.0.jar`.
 
-3. Usage
+### 3. Usage
 
 ```bash
 CP decomposition on Spark
@@ -41,20 +41,19 @@ Usage: ParaCP [options]
   --tries <value>         tries
   -o, --output-dir <dir>  output write path.
   -i, --input <value>     path of input file.
-  --master <value>        master of spark.
 ```
 
 `-s, --shape`, `-r, --rank` and `-i, --input` are required.
 
-4. Example call
+### 4. Example call
 
 Use the `spark-submit` to run ParaCP on cluster,
 
 ```bash
 spark-submit \
 --class org.chaomai.paraten.apps.ParaCP \
---master  \
---executor-cores=4 \
+--master spark://Chaos-MacBook-Pro.local:7077 \
+--total-executor-cores=4 \
 --executor-memory=2g \
 target/scala-2.11/ParaTen-assembly-1.0.jar \
 -s 2,2,3,2 -r 5 \
@@ -68,7 +67,7 @@ Also you can use `ParaCP_cluster_deploy_mode.sh` or `ParaCP_client_deploy_mode.s
 ```
 [dim_1,..,dim_N (tensor)] [rank] [tensor file path] [output path] \
 [max iteration] [tolerance] [tries] [master of Spark] \
-[spark.cores.max] [spark.executor.memory]
+[total-executor-cores] [executor-memory]
 ```
 
 The first one submit with `--deploy-mode cluster`.
@@ -83,7 +82,7 @@ spark://Chaos-MacBook-Pro.local:6066 \
 4 2g
 ```
 
-5. Example decomposition
+### 5. Example decomposition
 
 * original image
 
