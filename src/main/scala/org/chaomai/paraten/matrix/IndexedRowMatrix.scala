@@ -13,6 +13,7 @@ import breeze.numerics.sqrt
 import breeze.stats.distributions.Rand
 import breeze.storage.Zero
 import org.apache.spark.SparkContext
+import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.rdd.RDD
 import org.chaomai.paraten.support.{CanApproximatelyEqual, CanUse}
 
@@ -152,6 +153,37 @@ class IndexedRowMatrix[
                         numRows,
                         storage.map(row => IndexedColumn(row.ridx, row.rvec)))
 
+  /***
+    * Matrix product.
+    *
+    * @param broadm broadcast matrix.
+    * @return       product.
+    */
+  def *(broadm: Broadcast[BDM[V]]): IndexedRowMatrix[V] = {
+    require(
+      numCols == broadm.value.rows,
+      s"Required matrix product, "
+        + s"but the m1.numCols = $numCols and m2.numRows = ${broadm.value.rows}")
+
+
+    val r = storage.map { row =>
+      val ridx = row.ridx
+      val rvec = row.rvec
+
+      val m = broadm.value
+      val vec = m(::, BBCOp) dot rvec
+      IndexedRow(ridx, vec.t)
+    }
+
+    IndexedRowMatrix(numRows, broadm.value.cols, r)
+  }
+
+  /***
+    * Matrix product.
+    *
+    * @param m  another matrix.
+    * @return   product.
+    */
   def *(m: BDM[V]): IndexedRowMatrix[V] = {
     require(numCols == m.rows,
             s"Required matrix product, "

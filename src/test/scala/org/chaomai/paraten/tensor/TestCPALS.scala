@@ -1,7 +1,5 @@
 package org.chaomai.paraten.tensor
 
-import org.apache.spark.{SparkConf, SparkContext}
-import org.chaomai.paraten.matrix.IndexedRowMatrix
 import org.chaomai.paraten.{Common, UnitSpec}
 
 /**
@@ -14,11 +12,13 @@ class TestCPALS extends UnitSpec {
 
     val t = Common.dim4DenseTensor
     val rank = 5
+    val tol = 0.1
+
     val (fms, l) = new CPALS()
       .setRank(rank)
       .setMaxIter(25)
-      .setTol(0.1)
-      .setTries(2)
+      .setTol(tol)
+      .setTries(3)
       .run(t)
 
     fms.foreach(e => println(e.toDenseMatrix))
@@ -27,7 +27,7 @@ class TestCPALS extends UnitSpec {
     val t1 = CoordinateTensor.fromFacMats(t.shape, rank, fms, l)
     println(t1)
 
-    assert(t.:~==(t1, 0.1))
+    assert(t.:~==(t1, tol))
   }
 
   it should "perform cp decomposition on a sparse tensor" in {
@@ -36,11 +36,13 @@ class TestCPALS extends UnitSpec {
 
     val t = Common.dim4SparseTensor
     val rank = 8
+    val tol = 1e-3
+
     val (fms, l) = new CPALS()
       .setRank(rank)
       .setMaxIter(25)
-      .setTol(0.1)
-      .setTries(2)
+      .setTol(tol)
+      .setTries(3)
       .run(t)
 
     fms.foreach(e => println(e.toDenseMatrix))
@@ -49,6 +51,6 @@ class TestCPALS extends UnitSpec {
     val t1 = CoordinateTensor.fromFacMats(t.shape, rank, fms, l)
     println(t1)
 
-    assert(t.:~==(t1, 0.1))
+    assert(t.:~==(t1, tol))
   }
 }

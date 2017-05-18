@@ -9,6 +9,7 @@ import time
 # d: dense
 if len(sys.argv) != 3:
     print("wrong number of args")
+    print("input format: type[s | d] dimension[1,2,3,4,5]")
     sys.exit(1)
 
 random.seed(time.time())

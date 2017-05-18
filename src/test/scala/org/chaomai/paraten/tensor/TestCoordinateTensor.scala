@@ -154,7 +154,7 @@ class TestCoordinateTensor extends UnitSpec {
     val t = Common.dim4DenseTensor
     val v = sc.broadcast(DenseVector[Double](2, 2, 3))
 
-    val nModeProd = t nModeProd (2, v.value)
+    val nModeProd = t nModeProd(2, v)
 
     println(nModeProd)
 

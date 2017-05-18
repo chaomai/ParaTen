@@ -66,6 +66,19 @@ class TestIndexedRowMatrix extends UnitSpec {
     assert(p.toDenseMatrix == DenseMatrix((7, 10), (15, 22), (23, 34)))
   }
 
+  it should "perform matrix product with broadcast DenseMatrix" in {
+    implicit val sc = Common.sc
+    val m = IndexedRowMatrix.vals(Seq(1, 2), Seq(3, 4), Seq(5, 6))
+    val dm = DenseMatrix((1, 2), (3, 4))
+    val broaddm = sc.broadcast(dm)
+
+    val p = m * broaddm
+
+    println(p.toDenseMatrix)
+
+    assert(p.toDenseMatrix == DenseMatrix((7, 10), (15, 22), (23, 34)))
+  }
+
   it should "perform matrix product with transformed IndexedRowMatrix" in {
     implicit val sc = Common.sc
     val m = IndexedRowMatrix.vals(Seq(1, 2), Seq(3, 4), Seq(5, 6))

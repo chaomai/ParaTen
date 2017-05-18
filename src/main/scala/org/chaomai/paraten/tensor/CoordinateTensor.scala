@@ -4,6 +4,7 @@ import breeze.linalg.{isClose, DenseVector, SparseVector, VectorBuilder}
 import breeze.math.Semiring
 import breeze.numerics.sqrt
 import org.apache.spark.SparkContext
+import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.rdd.RDD
 import org.chaomai.paraten.matrix.IndexedRowMatrix
 import org.chaomai.paraten.support.{CanApproximatelyEqual, CanUse}
@@ -14,7 +15,8 @@ import scala.reflect.ClassTag
 /**
   * Created by chaomai on 02/05/2017.
   */
-class CoordinateTensor[V: ClassTag: Semiring: CanUse](
+class CoordinateTensor[
+    @specialized(Double, Float, Int, Long) V: ClassTag: Semiring: CanUse](
     sv: IndexedSeq[Int],
     private val storage: RDD[TEntry[V]])
     extends Serializable {
@@ -180,16 +182,16 @@ class CoordinateTensor[V: ClassTag: Semiring: CanUse](
   /***
     * n mode product with vector
     *
-    * @param m  mode.
-    * @param v  vector.
-    * @return   tensor that dimension m is 1.
+    * @param m      mode.
+    * @param broadv broadcast vector.
+    * @return       tensor that dimension m is 1.
     */
-  def nModeProd(m: Int, v: DenseVector[V])(
+  def nModeProd(m: Int, broadv: Broadcast[DenseVector[V]])(
       implicit n: Numeric[V]): CoordinateTensor[V] = {
     val fibers = fibersOnMode(m)
     val newEntries = fibers.map { p =>
       val (fi, coord) = (p._1, p._2)
-      val prod = LocalVectorOps.>*(fi, v)
+      val prod = LocalVectorOps.>*(fi, broadv.value)
       TEntry(coord, prod)
     }
     CoordinateTensor(shape.updated(m, 1), newEntries)
@@ -293,11 +295,13 @@ object CoordinateTensor {
 }
 
 object CoordinateTensorOps {
-  def elementwiseOp[V: ClassTag: Semiring: CanUse,
-                    U: ClassTag: Semiring: CanUse,
-                    W: ClassTag: Semiring: CanUse](t1: CoordinateTensor[V],
-                                                   t2: CoordinateTensor[U])(
-      f1: (V, U) => W)(f2: V => W)(f3: U => W): CoordinateTensor[W] = {
+  def elementwiseOp[
+      @specialized(Double, Float, Int, Long) V: ClassTag: Semiring: CanUse,
+      @specialized(Double, Float, Int, Long) U: ClassTag: Semiring: CanUse,
+      @specialized(Double, Float, Int, Long) W: ClassTag: Semiring: CanUse](
+      t1: CoordinateTensor[V],
+      t2: CoordinateTensor[U])(f1: (V, U) => W)(f2: V => W)(
+      f3: U => W): CoordinateTensor[W] = {
     require(t1.shape == t2.shape,
             s"Required elementwise operation, " +
               s"but get t1.shape = ${t1.shape} and t2.shape = ${t2.shape}")

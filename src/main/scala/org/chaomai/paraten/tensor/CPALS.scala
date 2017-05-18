@@ -1,6 +1,7 @@
 package org.chaomai.paraten.tensor
 
 import breeze.linalg.{isClose, pinv, DenseMatrix, DenseVector}
+import breeze.stats.distributions.Gaussian
 import org.apache.spark.SparkContext
 import org.chaomai.paraten.matrix.{CoordinateMatrix, IndexedRowMatrix}
 
@@ -48,7 +49,7 @@ class CPALS(private var rank: Int = 10,
     val fmat = (0 until rank).foldLeft(initfmat) { (accmat, r) =>
       val tmpten = krProdMatIdxs.foldLeft(tensor) { (accten, idx) =>
         val breadCol = sc.broadcast(facMats(idx).localColAt(r))
-        val prod = accten nModeProd (idx, breadCol.value)
+        val prod = accten nModeProd (idx, breadCol)
         breadCol.unpersist()
         prod
       }
@@ -83,7 +84,7 @@ class CPALS(private var rank: Int = 10,
                              m: DenseMatrix[Double])(
       implicit sc: SparkContext): IndexedRowMatrix[Double] = {
     val broadm = sc.broadcast(m)
-    val prod = decopkr * broadm.value
+    val prod = decopkr * broadm
     broadm.unpersist()
     prod
   }
@@ -103,16 +104,20 @@ class CPALS(private var rank: Int = 10,
     var optimalFacMats: IndexedSeq[IndexedRowMatrix[Double]] =
       shape.map(IndexedRowMatrix.zeros[Double](_, rank))
     var optimalLambda = DenseVector.zeros[Double](rank)
-    var reconsLoss: Double = Double.PositiveInfinity
+    var reconsLoss: Double = 0.0
     var optimalReconsLoss: Double = Double.PositiveInfinity
 
-    var prevLoss = 0.0
+    var prevLoss = Double.PositiveInfinity
 
     var ntries = 0
     while ((ntries < tries) && !isClose(reconsLoss, prevLoss, tol)) {
+      prevLoss = reconsLoss
+
       ntries += 1
 
-      var facMats = shape.map(IndexedRowMatrix.rand[Double](_, rank))
+      var facMats = shape.map(
+        IndexedRowMatrix
+          .rand[Double](_, rank, Gaussian(mu = 0.0, sigma = 0.5)))
       var lambda = DenseVector.zeros[Double](rank)
 
       var prevHead = IndexedRowMatrix.zeros[Double](shape(0), rank)
@@ -139,7 +144,6 @@ class CPALS(private var rank: Int = 10,
       val reconsTen =
         CoordinateTensor.fromFacMats(shape, rank, facMats, lambda)
       reconsLoss = (tensor :- reconsTen).norm
-      prevLoss = reconsLoss
 
       println(s"Total Iteration: $iter, loss: $reconsLoss")
 

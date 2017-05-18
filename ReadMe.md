@@ -93,9 +93,7 @@ spark://Chaos-MacBook-Pro.local:6066 \
 
 Set rank to 1000, iterate until converged. Pickup top k rank according to lambda vector and reconstruct the tensor i.e. the image.
 
-$$
-norm = \lVert\mathcal{X} - \mathcal{X}'\lVert = \sqrt{\sum^{I_1}_{i_1 = 1} \sum^{I_2}_{i_2 = 1} \cdots \sum^{I_N}_{i_N = 1} (x_{i_1 i_2 \cdots i_N} - x'_{i_1 i_2 \cdots i_N})^2}
-$$
+![norm = \lVert\mathcal{X} - \mathcal{X}'\lVert = \sqrt{\sum^{I_1}_{i_1 = 1} \sum^{I_2}_{i_2 = 1} \cdots \sum^{I_N}_{i_N = 1} (x_{i_1 i_2 \cdots i_N} - x'_{i_1 i_2 \cdots i_N})^2}](https://latex.codecogs.com/svg.latex?norm&space;=&space;\lVert\mathcal{X}&space;-&space;\mathcal{X}'\lVert&space;=&space;\sqrt{\sum^{I_1}_{i_1&space;=&space;1}&space;\sum^{I_2}_{i_2&space;=&space;1}&space;\cdots&space;\sum^{I_N}_{i_N&space;=&space;1}&space;(x_{i_1&space;i_2&space;\cdots&space;i_N}&space;-&space;x'_{i_1&space;i_2&space;\cdots&space;i_N})^2})
 
 | top k rank | norm | image |
 | --- | --- | --- |
